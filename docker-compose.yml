@@ -1,0 +1,17 @@
+# Optional: run PostgreSQL in Docker instead of installing it.
+#   docker compose up -d
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: attendance
+      POSTGRES_PASSWORD: attendance
+      POSTGRES_DB: attendance
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/create_test_db.sql:/docker-entrypoint-initdb.d/create_test_db.sql:ro
+volumes:
+  pgdata:
