@@ -7,15 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from werkzeug.middleware.proxy_fix import ProxyFix
-from dotenv import load_dotenv
 
-from .config import CONFIG_BY_NAME
+from .config import BASE_DIR, CONFIG_BY_NAME
 from .extensions import csrf, db, limiter, login_manager, migrate
-
-load_dotenv()  # read .env file if present
 
 MIN_PRODUCTION_SECRET_LENGTH = 32
 REQUIRED_DRIVER = "postgresql+psycopg"
+MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
 
 
 def create_app(config_name=None):
@@ -37,6 +35,7 @@ def create_app(config_name=None):
     _configure_proxy(app)
     _init_extensions(app)
     _register_core_routes(app)
+    _register_cli(app)
     return app
 
 
@@ -91,11 +90,21 @@ def _configure_proxy(app):
 
 
 def _init_extensions(app):
+    # Importing models registers every table and the Flask-Login user loader.
+    from . import models  # noqa: F401
+
     db.init_app(app)
-    migrate.init_app(app, db)
+    # Absolute path, so `flask db ...` and the tests find migrations from any folder.
+    migrate.init_app(app, db, directory=MIGRATIONS_DIR)
     login_manager.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
+
+
+def _register_cli(app):
+    from .cli import register_cli
+
+    register_cli(app)
 
 
 def _register_core_routes(app):
