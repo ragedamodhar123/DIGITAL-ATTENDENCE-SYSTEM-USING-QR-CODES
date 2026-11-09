@@ -97,3 +97,29 @@ def test_negative_proxy_count_raises(monkeypatch):
     monkeypatch.setattr(TestingConfig, "TRUSTED_PROXY_COUNT", -1)
     with pytest.raises(RuntimeError, match="TRUSTED_PROXY_COUNT"):
         create_app("testing")
+
+
+# ---- Module 1, part 1: keep test and real data apart --------------------
+
+def test_dev_app_refuses_test_database(monkeypatch):
+    from app.config import DevelopmentConfig
+
+    monkeypatch.setattr(
+        DevelopmentConfig,
+        "SQLALCHEMY_DATABASE_URI",
+        "postgresql+psycopg://u:p@localhost:5432/attendance_test",
+    )
+    monkeypatch.setattr(DevelopmentConfig, "SECRET_KEY", "dev-secret")
+    with pytest.raises(RuntimeError, match="TEST database"):
+        create_app("development")
+
+
+def test_tests_refuse_when_dev_and_test_urls_are_the_same(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", TestingConfig.SQLALCHEMY_DATABASE_URI)
+    with pytest.raises(RuntimeError, match="same database"):
+        create_app("testing")
+
+
+def test_tests_allowed_when_dev_url_is_a_different_database(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/attendance_dev")
+    assert create_app("testing").config["TESTING"] is True

@@ -64,12 +64,46 @@ def _validate_config(app):
     if url.drivername != REQUIRED_DRIVER:
         raise RuntimeError(f"Database URL must start with {REQUIRED_DRIVER}://")
 
-    # Tests wipe every table. Never let them touch the development database.
-    if app.config.get("TESTING") and not (url.database or "").endswith("_test"):
+    _check_database_separation(app, url)
+
+
+def _check_database_separation(app, url):
+    """Keep test and real data apart, in both directions.
+
+    Tests wipe every table, so:
+    - tests may only use a database whose name ends in _test, and never the
+      same database as DATABASE_URL;
+    - the real app may never use a database whose name ends in _test, because
+      the next pytest run would silently erase it.
+    """
+    is_test_db = (url.database or "").endswith("_test")
+
+    if not app.config.get("TESTING"):
+        if is_test_db:
+            raise RuntimeError(
+                f"DATABASE_URL points to '{url.database}', which is the TEST database. "
+                "Tests erase it on every run. Point DATABASE_URL at attendance_dev instead."
+            )
+        return
+
+    if not is_test_db:
         raise RuntimeError(
             "Refusing to run tests: the test database name must end with '_test' "
             "because tests delete all data in it."
         )
+
+    dev_uri = os.environ.get("DATABASE_URL")
+    if dev_uri:
+        try:
+            dev = make_url(dev_uri)
+        except ArgumentError:
+            return  # the dev app itself will report the malformed URL
+        same_server = (dev.host or "localhost", dev.port or 5432) == (url.host or "localhost", url.port or 5432)
+        if same_server and dev.database == url.database:
+            raise RuntimeError(
+                "Refusing to run tests: TEST_DATABASE_URL and DATABASE_URL point to the same "
+                "database. Tests would erase your development data."
+            )
 
 
 def _configure_logging(app):

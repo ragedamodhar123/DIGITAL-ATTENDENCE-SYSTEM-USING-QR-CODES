@@ -14,9 +14,13 @@ Done
 - Module 0, Part 2: User, Section, Course, CourseFaculty, Enrollment models; password and API-token hashing
 - Module 0, Part 3: AttendanceSession, PendingCheckin, AttendanceRecord, AttendanceAudit, ScanLog, FaceEmbedding models
 - Module 0, Part 4: Alembic migrations (with the audit trigger), `flask create-admin`, `flask seed-demo`
+- Module 1, Part 1: auth service (login, password rules, password change, admin token check);
+  startup guard that keeps test and development databases apart
 
 Next
-- Modules 1 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 1, Part 2: role decorators, first-login and face-enrolment gates, rate-limit keys
+- Module 1, Part 3: login, logout and change-password pages
+- Modules 2 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -92,7 +96,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Part 4: 149 passed.
+Expected after Module 1, Part 1: 202 passed.
 
 App (development):
 
@@ -137,6 +141,9 @@ attendance-system/
 │   ├── cli.py            flask create-admin, flask seed-demo
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
+│   ├── services/         business rules; no Flask request objects inside
+│   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
+│   │   └── auth_service.py  login, password rules, password change, admin token
 │   ├── models/
 │   │   ├── __init__.py   imports every model in one place
 │   │   ├── base.py       timestamp columns, string cleaning
@@ -146,6 +153,7 @@ attendance-system/
 │   │   └── face.py       FaceEmbedding (numbers only, no photos)
 │   └── utils/
 │       ├── security.py   Argon2 password hashing, API-token hashing
+│       ├── timeutils.py  utcnow() (always timezone-aware)
 │       └── validators.py username format rules (shared by CLI and API)
 └── tests/
     ├── conftest.py       builds the test database by running the real migrations
@@ -157,10 +165,11 @@ attendance-system/
     ├── test_models_attendance.py
     ├── test_models_face.py
     ├── test_migrations.py    migrations match models, trigger exists, downgrade works
-    └── test_cli.py           create-admin and seed-demo
+    ├── test_cli.py           create-admin and seed-demo
+    └── test_auth_service.py  login, password rules, password change, admin token
 ```
 
-Folders such as `app/services/`, `app/schemas/`, `app/blueprints/`,
+Folders such as `app/schemas/`, `app/blueprints/`,
 `app/templates/`, `app/static/` and `postman/` are added by later modules.
 (The originally planned `scripts/` folder became the `flask` commands in `app/cli.py`.)
 
@@ -188,6 +197,24 @@ Folders such as `app/services/`, `app/schemas/`, `app/blueprints/`,
 - The test database is built from the migrations, so a broken migration fails the tests.
 - Admins have no usable password; they work through Postman with an API token.
   Only a hash of the token is stored.
+- The app refuses to start if DATABASE_URL points to a `_test` database, and tests
+  refuse to run if TEST_DATABASE_URL and DATABASE_URL are the same database.
+
+
+## Authentication rules
+
+- Login failures always show the same message ("Invalid username or password"),
+  whether the username is unknown, the password is wrong or the account is disabled.
+- Unknown usernames still run a full password check, so response time does not
+  reveal which usernames exist.
+- Admins cannot log in with a password.
+- Passwords: 8 to 128 characters, at least one letter and one number, no leading or
+  trailing space, must not contain the username, must not be a common password.
+- Changing a password requires the current password, ends every other login
+  (session_version + 1), and completes the first-login step (must_change_password = False).
+- Admin API requests use the header `Authorization: Bearer <token>`.
+- There is no account lockout after failed logins: a classmate could lock someone out
+  just before class. Repeated attempts are slowed by rate limits instead (Module 1, Part 2).
 
 
 ## Troubleshooting
@@ -196,5 +223,12 @@ Folders such as `app/services/`, `app/schemas/`, `app/blueprints/`,
 - Database connection fails: check the port in pgAdmin (Server, Properties, Connection); it may be 5433 instead of 5432.
 - `SECRET_KEY is not set` or `DATABASE_URL is not set`: your `.env` file is missing or in the wrong folder; it must sit next to `wsgi.py`.
 - `relation "..." already exists` during `db upgrade`: the tables were created earlier without migrations.
-  In pgAdmin, Query Tool on `attendance_dev`: `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, then upgrade again.
+  In pgAdmin, open the Query Tool on `attendance_dev` and run BOTH lines together (select all, then Execute):
+  `DROP SCHEMA public CASCADE;` and `CREATE SCHEMA public AUTHORIZATION attendance_app;`. Then upgrade again.
+- `no schema has been selected to create in` during `db upgrade`: the app's user cannot use the
+  `public` schema (it is missing, or it was recreated by `postgres` without permissions). In pgAdmin,
+  Query Tool on `attendance_dev`, run:
+  `CREATE SCHEMA IF NOT EXISTS public;` and `ALTER SCHEMA public OWNER TO attendance_app;`
+  then upgrade again.
+- Using Git Bash instead of PowerShell: activate with `source venv/Scripts/activate`; all other commands are the same.
 - `Error: No such command 'db'`: the virtual environment is not active (`venv\Scripts\activate`).

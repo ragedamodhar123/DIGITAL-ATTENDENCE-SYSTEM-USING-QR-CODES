@@ -25,7 +25,7 @@ def make_user(role=Role.FACULTY, username=None, section=None, **extra):
         username=username or f"{role}{next(_seq):04d}",
         full_name=extra.pop("full_name", f"Test {role.title()}"),
         role=role,
-        password_hash=_TEST_HASH,
+        password_hash=extra.pop("password_hash", _TEST_HASH),
         section=section,
         **extra,
     )
