@@ -18,10 +18,12 @@ Done
   startup guard that keeps test and development databases apart
 - Module 1, Part 2: route protection (role, first-login and face-enrolment gates), admin token
   decorator, rate-limit keys, consistent JSON/HTML error responses
+- Module 1, Part 3: login, logout and change-password pages; student and faculty dashboards;
+  login rate limits; security headers; placeholder face-registration page
 
 Next
-- Module 1, Part 3: login, logout and change-password pages
-- Modules 2 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 2: admin API (sections, faculty, students, courses, enrolments, issuing credentials)
+- Modules 3 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -80,7 +82,15 @@ Lost the token? Issue a new one (the old one stops working):
 flask --app wsgi create-admin --username admin --name "College Admin" --rotate-token
 ```
 
-6. Optional, development only: add demo data (3 sections, 2 faculty, 10 students,
+6. Download Bootstrap (served from your own server, so pages work even if the
+internet is slow or blocked in class). In Git Bash, from the project folder:
+
+```bash
+curl -L -o app/static/vendor/bootstrap/bootstrap.min.css https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css
+curl -L -o app/static/vendor/bootstrap/bootstrap.bundle.min.js https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
+```
+
+7. Optional, development only: add demo data (3 sections, 2 faculty, 10 students,
 3 courses). All demo users have the password `Demo@12345` and must change it on
 first login. Safe to run more than once.
 
@@ -97,7 +107,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 1, Part 2: 257 passed.
+Expected after Module 1, Part 3: 291 passed.
 
 App (development):
 
@@ -106,6 +116,7 @@ flask --app wsgi run --debug
 ```
 
 Then open http://127.0.0.1:5000/health. You should see `{"database": "ok", "status": "ok"}`.
+Open http://127.0.0.1:5000/ to log in (for example as `demo-fac01` / `Demo@12345`).
 
 
 ## Changing the database schema
@@ -142,9 +153,20 @@ attendance-system/
 │   ├── cli.py            flask create-admin, flask seed-demo
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
+│   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
+│   │   ├── auth/         /login, /logout (POST only), /change-password
+│   │   ├── main/         / (sends each user to their own home page)
+│   │   ├── student/      /student/ dashboard
+│   │   ├── faculty/      /faculty/ dashboard
+│   │   └── face/         /face/enroll (placeholder until Module 3)
+│   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
+│   ├── static/
+│   │   ├── css/app.css   colours and layout on top of Bootstrap
+│   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
 │   ├── services/         business rules; no Flask request objects inside
 │   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
-│   │   └── auth_service.py  login, password rules, password change, admin token
+│   │   ├── auth_service.py   login, password rules, password change, admin token
+│   │   └── course_service.py course lists for the dashboards
 │   ├── models/
 │   │   ├── __init__.py   imports every model in one place
 │   │   ├── base.py       timestamp columns, string cleaning
@@ -173,11 +195,11 @@ attendance-system/
     ├── test_cli.py           create-admin and seed-demo
     ├── test_auth_service.py  login, password rules, password change, admin token
     ├── test_decorators.py    route protection, admin token, error responses
-    └── test_http_utils.py    safe redirects, rate-limit keys
+    ├── test_http_utils.py    safe redirects, rate-limit keys
+    └── test_auth_routes.py   login/logout/change-password pages, dashboards, every route protected
 ```
 
-Folders such as `app/schemas/`, `app/blueprints/`,
-`app/templates/`, `app/static/` and `postman/` are added by later modules.
+Folders such as `app/schemas/` and `postman/` are added by later modules.
 (The originally planned `scripts/` folder became the `flask` commands in `app/cli.py`.)
 
 
@@ -238,6 +260,9 @@ Every route uses exactly one decorator:
 or returns JSON for `/api/` routes. The change-password page uses
 `allow_pending_password=True`; the face-enrolment page uses `allow_without_face=True`.
 
+A test (`test_every_route_declares_who_may_use_it`) fails if any route is added without
+one of these decorators. Only `/login`, `/health` and static files are public.
+
 All JSON endpoints live under `/api/`. Errors there always look like
 `{"error": "<code>", "message": "...", "details": {...}}`. Internal error text is never
 sent to the browser; it goes to the server log.
@@ -258,3 +283,7 @@ sent to the browser; it goes to the server log.
   then upgrade again.
 - Using Git Bash instead of PowerShell: activate with `source venv/Scripts/activate`; all other commands are the same.
 - `Error: No such command 'db'`: the virtual environment is not active (`venv\Scripts\activate`).
+- Pages look unstyled (plain text, no colours): Bootstrap was not downloaded. Run the two
+  curl commands in setup step 6, then hard-refresh the browser (Ctrl+F5).
+- "This form expired or came from another site": the page was open across a server restart
+  with a changed SECRET_KEY, or cookies are blocked. Reload the page and submit again.

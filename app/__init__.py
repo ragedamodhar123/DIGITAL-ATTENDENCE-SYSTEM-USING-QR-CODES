@@ -3,6 +3,7 @@ import logging
 import os
 
 from flask import Flask, jsonify
+from flask_login import current_user
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
@@ -36,6 +37,8 @@ def create_app(config_name=None):
     _init_extensions(app)
     _register_auth_handlers()
     _register_error_handlers(app)
+    _register_security_headers(app)
+    _register_blueprints(app)
     _register_core_routes(app)
     _register_cli(app)
     return app
@@ -147,6 +150,34 @@ def _register_error_handlers(app):
     from .utils.errors import register_error_handlers
 
     register_error_handlers(app)
+
+
+def _register_blueprints(app):
+    from .blueprints.auth import bp as auth_bp
+    from .blueprints.face import bp as face_bp
+    from .blueprints.faculty import bp as faculty_bp
+    from .blueprints.main import bp as main_bp
+    from .blueprints.student import bp as student_bp
+
+    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp):
+        app.register_blueprint(blueprint)
+
+
+def _register_security_headers(app):
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        # Pages for logged-in users must not be cached: otherwise pressing Back
+        # after logging out on a shared computer would show the last page.
+        # (Browsers' in-memory back-forward cache is handled by page-freshness.js
+        # and the Clear-Site-Data header on logout.)
+        if current_user.is_authenticated and not response.headers.get("Cache-Control"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"  # older browsers and proxies
+            response.headers["Expires"] = "0"
+        return response
 
 
 def _register_cli(app):

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<section class="panel panel-narrow">
+  <h1 class="h3 mb-2">{{ title }}</h1>
+  <p>{{ message }}</p>
+  <a class="btn btn-outline-primary" href="{{ url_for('main.home') if current_user.is_authenticated else url_for('auth.login') }}">
+    {{ 'Go to your home page' if current_user.is_authenticated else 'Go to log in' }}
+  </a>
+</section>
+{% endblock %}

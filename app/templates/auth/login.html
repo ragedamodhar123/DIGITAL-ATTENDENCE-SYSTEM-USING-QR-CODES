@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<section class="panel panel-narrow">
+  <h1 class="h3 mb-1">Log in</h1>
+  <p class="text-muted mb-4">Use the roll number or staff ID your college gave you.</p>
+
+  {% if next_url %}
+    <div class="alert alert-info">Log in to continue.</div>
+  {% endif %}
+  {% if error %}
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('auth.login') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+
+    <div class="mb-3">
+      <label for="username" class="form-label">Roll number or staff ID</label>
+      <input id="username" name="username" type="text" class="form-control form-control-lg"
+             value="{{ username }}" autocomplete="username" autocapitalize="none"
+             spellcheck="false" maxlength="64" required autofocus>
+    </div>
+
+    <div class="mb-3">
+      <label for="password" class="form-label">Password</label>
+      <input id="password" name="password" type="password" class="form-control form-control-lg"
+             autocomplete="current-password" maxlength="128" required>
+    </div>
+
+    <div class="form-check mb-4">
+      <input id="remember" name="remember" type="checkbox" class="form-check-input">
+      <label for="remember" class="form-check-label">Keep me logged in on this phone</label>
+      <div class="form-text">Leave this off on shared or lab computers.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100">Log in</button>
+  </form>
+
+  <p class="small text-muted mt-4 mb-0">Forgot your password? Ask your faculty or the admin to issue a new one.</p>
+</section>
+{% endblock %}

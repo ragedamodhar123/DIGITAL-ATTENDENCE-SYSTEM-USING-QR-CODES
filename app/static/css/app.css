@@ -1,0 +1,90 @@
+/* Attendance app styles. Bootstrap 5 does the heavy lifting; this file sets the
+   palette and a few layout pieces. Built for phones first. */
+
+:root {
+  --ink: #1f2a44;          /* primary: headings, bar, buttons */
+  --ink-hover: #2c3b5e;
+  --page: #f3f5f8;         /* page background */
+  --panel: #ffffff;        /* content panels */
+  --line: #d9dee7;         /* panel borders */
+  --muted: #5b6475;        /* secondary text (passes WCAG AA on white) */
+  --ok: #1e7f5c;           /* success */
+  --bad: #b3261e;          /* errors */
+
+  --bs-body-bg: var(--page);
+  --bs-body-color: #1d2433;
+  --bs-secondary-color: var(--muted);
+  --bs-border-color: var(--line);
+  --bs-link-color: var(--ink);
+  --bs-link-hover-color: var(--ink-hover);
+  --bs-success: var(--ok);
+  --bs-danger: var(--bad);
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  line-height: 1.5;
+}
+
+.text-muted { color: var(--muted) !important; }
+
+/* Top bar */
+.app-bar { background: var(--ink); color: #fff; }
+.app-bar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; min-height: 3.5rem;
+}
+.app-name { color: #fff; font-weight: 700; font-size: 1.125rem; text-decoration: none; }
+.app-name:hover, .app-name:focus { color: #fff; text-decoration: underline; }
+.app-user { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.app-user-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12rem;
+  opacity: .9;
+}
+
+/* Page body */
+.app-main { max-width: 44rem; padding-top: 1.5rem; padding-bottom: 3rem; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.panel-narrow { max-width: 26rem; margin-left: auto; margin-right: auto; }
+.panel-quiet { background: transparent; border-style: dashed; }
+
+h1, h2, .h3, .h5 { color: var(--ink); font-weight: 700; }
+
+/* Buttons: one primary colour, generous tap targets on phones */
+.btn-primary {
+  --bs-btn-bg: var(--ink); --bs-btn-border-color: var(--ink);
+  --bs-btn-hover-bg: var(--ink-hover); --bs-btn-hover-border-color: var(--ink-hover);
+  --bs-btn-active-bg: var(--ink-hover); --bs-btn-active-border-color: var(--ink-hover);
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--ink); --bs-btn-border-color: var(--ink);
+  --bs-btn-hover-bg: var(--ink); --bs-btn-hover-border-color: var(--ink);
+}
+.btn-lg { min-height: 3rem; }
+
+/* Clearly visible keyboard focus everywhere */
+:focus-visible { outline: 3px solid #4d7cff; outline-offset: 2px; }
+
+/* Course lists */
+.course-list { list-style: none; margin: 0; padding: 0; }
+.course-list li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  column-gap: .75rem;
+  padding: .75rem 0;
+  border-top: 1px solid var(--line);
+}
+.course-list li:first-child { border-top: 0; padding-top: 0; }
+.course-code { font-weight: 700; color: var(--ink); grid-row: span 2; }
+.course-term { font-size: .875rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

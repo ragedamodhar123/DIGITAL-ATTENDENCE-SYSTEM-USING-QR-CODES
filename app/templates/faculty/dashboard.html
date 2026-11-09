@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1 class="h3 mb-0">{{ current_user.full_name }}</h1>
+</section>
+
+<section class="panel">
+  <h2 class="h5 mb-3">Courses you teach</h2>
+  {% if courses %}
+    <ul class="course-list">
+      {% for course, student_count in courses %}
+        <li>
+          <span class="course-code">{{ course.code }}</span>
+          <span class="course-name">{{ course.name }}</span>
+          <span class="course-term text-muted">
+            {{ course.term }}, {{ student_count }} student{{ '' if student_count == 1 else 's' }}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0">No courses are assigned to you yet. Ask the admin to assign your courses.</p>
+  {% endif %}
+</section>
+{% endblock %}

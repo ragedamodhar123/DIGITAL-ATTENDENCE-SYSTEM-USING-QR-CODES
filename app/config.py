@@ -77,7 +77,9 @@ class TestingConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
     # Disabled for most tests; a dedicated test re-enables it to prove CSRF works.
     WTF_CSRF_ENABLED = False
-    RATELIMIT_ENABLED = False
+    # Rate limits stay ON in tests (counters are reset before every test), so the
+    # tests exercise the same limits as the real app.
+    RATELIMIT_STORAGE_URI = "memory://"
 
 
 class ProductionConfig(BaseConfig):

@@ -9,7 +9,7 @@ from flask_migrate import upgrade
 from sqlalchemy import text
 
 from app import create_app
-from app.extensions import db
+from app.extensions import db, limiter
 
 
 def reset_database():
@@ -33,9 +33,22 @@ def app():
         db.session.remove()
 
 
+@pytest.fixture(scope="session")
+def web_app(app):
+    """A second app instance used only for HTTP requests.
+
+    The `app` fixture keeps one app context open for the whole run (so tests can
+    use the database directly). Flask would let test requests reuse that context,
+    leaking the logged-in user from one request into the next, which cannot happen
+    on a real server. Requests to this separate instance always get a fresh
+    context, exactly like production. Data the test creates must be committed.
+    """
+    return create_app("testing")
+
+
 @pytest.fixture
-def client(app):
-    return app.test_client()
+def client(web_app):
+    return web_app.test_client()
 
 
 @pytest.fixture
@@ -45,6 +58,7 @@ def cli(app):
 
 @pytest.fixture(autouse=True)
 def _clean_tables(app):
+    limiter.reset()  # every test starts with fresh rate-limit counters
     yield
     db.session.rollback()
     # TRUNCATE instead of DELETE: the audit table blocks DELETE by design

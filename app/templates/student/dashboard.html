@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1 class="h3 mb-1">{{ current_user.full_name }}</h1>
+  <p class="text-muted mb-0">
+    Roll number {{ current_user.username | upper }}
+    {% if current_user.section %}, section {{ current_user.section.code }}{% endif %}
+  </p>
+</section>
+
+<section class="panel">
+  <h2 class="h5 mb-3">Your courses</h2>
+  {% if courses %}
+    <ul class="course-list">
+      {% for course in courses %}
+        <li>
+          <span class="course-code">{{ course.code }}</span>
+          <span class="course-name">{{ course.name }}</span>
+          <span class="course-term text-muted">{{ course.term }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0">You are not enrolled in any courses yet. Ask your faculty or the admin to add you.</p>
+  {% endif %}
+</section>
+
+<section class="panel panel-quiet">
+  <p class="mb-0">To mark attendance, scan the code your faculty shows in class.</p>
+</section>
+{% endblock %}
