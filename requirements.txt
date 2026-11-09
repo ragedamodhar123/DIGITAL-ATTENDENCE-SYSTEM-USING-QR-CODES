@@ -23,4 +23,9 @@ waitress>=3.0,<4
 # Testing
 pytest>=8.0,<9
 
-# Added in later modules: qrcode[pil], face library, pandas, openpyxl
+# Face checks (Module 3). "headless" = no desktop windows needed, smaller install.
+opencv-python-headless>=4.10,<5
+numpy>=1.26,<3
+Pillow>=10.0
+
+# Added in later modules: qrcode, pandas, openpyxl

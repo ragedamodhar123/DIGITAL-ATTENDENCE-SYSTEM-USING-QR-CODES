@@ -3,7 +3,7 @@
 /api/... routes always get JSON: {"error": "<code>", "message": "...", "details": {...}}
 Pages get the errors/error.html template with a plain-language message.
 """
-from flask import render_template
+from flask import jsonify, render_template
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
 
@@ -39,8 +39,8 @@ def register_error_handlers(app):
     @app.errorhandler(ServiceError)
     def handle_service_error(exc):
         if wants_json():
-            extra = {"details": exc.details} if exc.details else {}
-            return json_error(exc.status_code, exc.code, exc.message, **extra)
+            # to_dict() lets an error add its own fields (e.g. a face problem's "reason").
+            return jsonify(exc.to_dict()), exc.status_code
         return render_error_page(exc.status_code, exc.message)
 
     @app.errorhandler(CSRFError)

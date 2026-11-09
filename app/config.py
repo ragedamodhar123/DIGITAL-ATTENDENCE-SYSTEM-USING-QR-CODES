@@ -59,6 +59,19 @@ class BaseConfig:
 
     TRUSTED_PROXY_COUNT = _int_env("TRUSTED_PROXY_COUNT", 0)
 
+    # Face checks (Module 3). Calibrated on the official OpenCV models; see README "Face checks".
+    FACE_MODEL_DIR = os.environ.get("FACE_MODEL_DIR", os.path.join(BASE_DIR, "models"))
+    FACE_MATCH_THRESHOLD = 0.363          # cosine similarity; OpenCV's published value for SFace
+    FACE_MIN_DETECTION_SCORE = 0.85       # how sure the detector must be that it found a face
+    FACE_MIN_SIZE_PX = 80                 # face width/height in the (scaled) photo
+    FACE_EDGE_TOLERANCE_PX = 4            # how far a face box may stick out of the photo
+    FACE_MIN_SHARPNESS = 25.0             # blur check, measured on the face resized to 112 px
+    FACE_BRIGHTNESS_RANGE = (40.0, 225.0)  # mean face brightness, 0-255
+    FACE_ENROL_CAPTURES = 3               # photos taken when registering
+    FACE_MAX_IMAGE_BYTES = 3 * 1024 * 1024
+    FACE_MAX_IMAGE_SIDE = 4096
+    FACE_MIN_IMAGE_SIDE = 160
+
     # Attendance rules (used from Module 4 onward)
     APP_TIMEZONE = "Asia/Kolkata"
     QR_ROTATION_SECONDS = 10

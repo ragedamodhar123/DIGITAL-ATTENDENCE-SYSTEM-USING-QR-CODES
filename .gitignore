@@ -7,3 +7,6 @@ __pycache__/
 instance/
 *.log
 requirements.lock
+
+# Face model files (downloaded with: flask --app wsgi download-face-models)
+models/

@@ -1,7 +1,8 @@
 """Command-line tools, run with `flask --app wsgi <command>`.
 
-create-admin   First admin account and its API token (for Postman).
-seed-demo      Demo sections, faculty, students, courses and enrolments.
+create-admin          First admin account and its API token (for Postman).
+seed-demo             Demo sections, faculty, students, courses and enrolments.
+download-face-models  The two OpenCV face model files (about 39 MB), checksum-verified.
 
 These are Flask commands rather than loose scripts so they automatically
 load .env, use the same config checks as the app, and can be tested.
@@ -23,6 +24,7 @@ DEMO_TERM = "DEMO"
 def register_cli(app):
     app.cli.add_command(create_admin)
     app.cli.add_command(seed_demo)
+    app.cli.add_command(download_face_models)
 
 
 # ---- create-admin --------------------------------------------------------
@@ -213,3 +215,63 @@ def _get_or_create_user(username, name, role, password_hash, section, created, c
     db.session.add(user)
     created[counter_key] += 1
     return user
+
+
+# ---- download-face-models ------------------------------------------------
+
+DOWNLOAD_TIMEOUT_SECONDS = 60
+
+
+@click.command("download-face-models")
+def download_face_models():
+    """Download the OpenCV face models and verify them against the official checksums."""
+    import hashlib
+    import os
+    import urllib.request
+
+    from flask import current_app
+
+    from .services.face_engine import MODEL_FILES, file_sha256
+
+    model_dir = current_app.config["FACE_MODEL_DIR"]
+    os.makedirs(model_dir, exist_ok=True)
+
+    for name, info in MODEL_FILES.items():
+        target = os.path.join(model_dir, name)
+        if os.path.isfile(target) and file_sha256(target) == info["sha256"]:
+            click.echo(f"{name}: already present and verified.")
+            continue
+
+        click.echo(f"{name}: downloading {info['size'] / 1_000_000:.1f} MB ...")
+        partial = target + ".part"
+        digest = hashlib.sha256()
+        try:
+            with urllib.request.urlopen(info["url"], timeout=DOWNLOAD_TIMEOUT_SECONDS) as response, open(partial, "wb") as out:
+                for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                    out.write(chunk)
+                    digest.update(chunk)
+        except OSError as exc:
+            _remove_quietly(partial)
+            raise click.ClickException(
+                f"Could not download {name}: {exc}. Check your internet connection and try again."
+            ) from exc
+
+        if digest.hexdigest() != info["sha256"]:
+            _remove_quietly(partial)
+            raise click.ClickException(
+                f"{name} did not match the official checksum, so it was discarded. "
+                "The download may have been interrupted or altered. Run the command again."
+            )
+        os.replace(partial, target)  # only a verified file ever gets the real name
+        click.echo(f"{name}: verified.")
+
+    click.echo(f"Face models ready in {model_dir}")
+
+
+def _remove_quietly(path):
+    import os
+
+    try:
+        os.remove(path)
+    except OSError:
+        pass
