@@ -24,10 +24,12 @@ Done
   bulk-create students, edit, deactivate/reactivate, issue temporary passwords)
 - Module 2, Part 2: academic service (sections, courses, faculty assignment, enrolment by
   username list or whole section, drop, course roster)
+- Module 2, Part 3: admin JSON API under /api/admin (token only, CSRF-exempt); faculty
+  course roster page with "New password" for students; Postman collection and environment
 
 Next
-- Module 2, Part 3: admin API routes and a Postman collection
-- Modules 3 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 3: face registration (camera capture, face embedding, quality checks)
+- Modules 4 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -111,7 +113,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 2, Part 2: 392 passed.
+Expected after Module 2, Part 3: 418 passed.
 
 App (development):
 
@@ -158,15 +160,17 @@ attendance-system/
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
 │   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
+│   │   ├── admin_api/    /api/admin/... JSON API for Postman (users.py, academic.py)
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ dashboard
-│   │   ├── faculty/      /faculty/ dashboard
+│   │   ├── faculty/      /faculty/ dashboard, /faculty/courses/<id> roster, issue student passwords
 │   │   └── face/         /face/enroll (placeholder until Module 3)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
 │   │   ├── css/app.css   colours and layout on top of Bootstrap
 │   │   ├── js/page-freshness.js  reloads logged-in pages restored by the Back button
+│   │   ├── js/confirm-forms.js   asks before submitting forms marked data-confirm
 │   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
 │   ├── schemas/          input validation (shape of data) with marshmallow
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
@@ -211,10 +215,12 @@ attendance-system/
     ├── test_auth_routes.py   login/logout/change-password pages, dashboards, every route protected
     ├── test_user_schemas.py  input validation for user management
     ├── test_user_service.py  user management rules and permissions
-    └── test_academic_service.py  sections, courses, assignment, enrolment, roster
+    ├── test_academic_service.py  sections, courses, assignment, enrolment, roster
+    ├── test_admin_api.py     admin API over HTTP, token on every route
+    └── test_faculty_pages.py faculty roster page, issuing student passwords
 ```
 
-The `postman/` folder is added in Module 2, Part 3.
+`postman/` holds the Postman collection and a local environment (see "Using the admin API").
 (The originally planned `scripts/` folder became the `flask` commands in `app/cli.py`.)
 
 
@@ -268,6 +274,40 @@ The `postman/` folder is added in Module 2, Part 3.
   just before class. Repeated attempts are slowed by rate limits instead: 10 per 5 minutes
   for one username from one IP, and 300 per 5 minutes per IP (a whole classroom shares
   one college IP).
+
+
+## Using the admin API (Postman)
+
+1. Start the app: `flask --app wsgi run`.
+2. In Postman, Import both files from `postman/`:
+   `qr-attendance-admin.postman_collection.json` and `qr-attendance-local.postman_environment.json`.
+3. Open the environment "QR Attendance - Local" and paste your admin token into `admin_token`
+   (the token printed by `flask --app wsgi create-admin`; lost it? use `--rotate-token`).
+4. Select that environment (top right) and run the requests top to bottom the first time.
+   Requests that create something save its id for the requests after them.
+
+Running the Create requests again returns 409 (already exists); change the codes or
+usernames in the body to create new records.
+
+Endpoints (all under `/api/admin`, all need `Authorization: Bearer <token>`):
+
+- People: `POST /faculty`, `POST /students`, `POST /students/bulk`, `GET /users`,
+  `GET|PATCH /users/<id>`, `POST /users/<id>/deactivate|activate|temporary-password`
+- Sections: `GET|POST /sections`, `PATCH /sections/<id>`, `POST /sections/<id>/retire|restore`
+- Courses: `GET|POST /courses`, `GET|PATCH /courses/<id>`, `POST /courses/<id>/retire|restore`
+- Teaching: `POST /courses/<id>/faculty` (body `username`), `DELETE /courses/<id>/faculty/<username>`
+- Enrolment: `POST /courses/<id>/enrolments` (body `usernames`),
+  `POST /courses/<id>/enrolments/section` (body `section_code`),
+  `DELETE /courses/<id>/enrolments/<username>`, `GET /courses/<id>/roster?include_dropped=true`
+
+Responses: single records are wrapped (`{"user": ...}`, `{"course": ...}`); lists are
+`{"items": [...], "total": n, "page": p, "per_page": n}`; errors are
+`{"error": code, "message": ..., "details": {field: [messages]}}` with 401 (token),
+404 (not found), 409 (already exists) or 422 (invalid input). API responses are never cached.
+
+Faculty can also issue a new temporary password to a student from the website: open the
+course from the faculty home page and press "New password" next to the student. The
+password is shown once on screen and is never stored in the session cookie.
 
 
 ## User management rules

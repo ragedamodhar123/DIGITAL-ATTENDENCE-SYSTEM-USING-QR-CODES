@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ course.code }}{% endblock %}
+{% block content %}
+<p class="mb-2"><a href="{{ url_for('faculty.dashboard') }}">Your courses</a></p>
+
+<section class="panel">
+  <h1 class="h3 mb-1">{{ course.code }} {{ course.name }}</h1>
+  <p class="text-muted mb-0">{{ course.term }}, {{ entries | length }} student{{ '' if entries | length == 1 else 's' }}</p>
+</section>
+
+<section class="panel">
+  <h2 class="h5 mb-3">Students</h2>
+  {% if entries %}
+    <ul class="roster">
+      {% for entry in entries %}
+        {% set s = entry.student %}
+        <li class="roster-row">
+          <div class="roster-who">
+            <div class="fw-semibold">{{ s.full_name }}</div>
+            <div class="text-muted small">{{ s.username | upper }}{% if s.section %}, {{ s.section.code }}{% endif %}</div>
+            <div class="roster-status small">
+              {% if not s.is_active %}
+                <span class="status status-bad">Account deactivated</span>
+              {% elif s.must_change_password %}
+                <span class="status">Has not set a password yet</span>
+              {% elif s.face is none %}
+                <span class="status">Face not registered</span>
+              {% else %}
+                <span class="status status-ok">Ready</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if s.is_active and course.is_active %}
+            <form method="post"
+                  action="{{ url_for('faculty.issue_temporary_password', course_id=course.id, username=s.username) }}"
+                  data-confirm="Give {{ s.full_name }} a new temporary password? Their current password stops working and they are signed out.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-primary">New password</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0">No students are enrolled in this course yet. Ask the admin to enrol them.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -85,6 +85,30 @@ h1, h2, .h3, .h5 { color: var(--ink); font-weight: 700; }
 .course-code { font-weight: 700; color: var(--ink); grid-row: span 2; }
 .course-term { font-size: .875rem; }
 
+/* Course codes that are links */
+a.course-code { text-decoration: none; }
+a.course-code:hover, a.course-code:focus { text-decoration: underline; }
+
+/* Roster */
+.roster { list-style: none; margin: 0; padding: 0; }
+.roster-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .75rem 0; border-top: 1px solid var(--line);
+}
+.roster-row:first-child { border-top: 0; padding-top: 0; }
+.roster-who { min-width: 0; }
+.status { color: var(--muted); }
+.status-ok { color: var(--ok); }
+.status-bad { color: var(--bad); }
+
+/* Temporary password: large, spaced, easy to read aloud or copy by hand */
+.temp-password {
+  font-size: 2rem; font-weight: 700; letter-spacing: .08em; text-align: center;
+  color: var(--ink); background: var(--page); border: 1px solid var(--line);
+  border-radius: .5rem; padding: 1rem; margin-bottom: 1rem;
+  user-select: all; word-break: break-all;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

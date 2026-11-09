@@ -11,7 +11,7 @@
     <ul class="course-list">
       {% for course, student_count in courses %}
         <li>
-          <span class="course-code">{{ course.code }}</span>
+          <a class="course-code" href="{{ url_for('faculty.course', course_id=course.id) }}">{{ course.code }}</a>
           <span class="course-name">{{ course.name }}</span>
           <span class="course-term text-muted">
             {{ course.term }}, {{ student_count }} student{{ '' if student_count == 1 else 's' }}

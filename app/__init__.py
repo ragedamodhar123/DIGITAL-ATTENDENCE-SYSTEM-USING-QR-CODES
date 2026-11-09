@@ -2,7 +2,7 @@
 import logging
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_login import current_user
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -153,14 +153,17 @@ def _register_error_handlers(app):
 
 
 def _register_blueprints(app):
+    from .blueprints.admin_api import bp as admin_api_bp
     from .blueprints.auth import bp as auth_bp
     from .blueprints.face import bp as face_bp
     from .blueprints.faculty import bp as faculty_bp
     from .blueprints.main import bp as main_bp
     from .blueprints.student import bp as student_bp
 
-    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp):
+    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp, admin_api_bp):
         app.register_blueprint(blueprint)
+    # Token-only API: no cookies are used, so CSRF does not apply (see admin_api/__init__.py).
+    csrf.exempt(admin_api_bp)
 
 
 def _register_security_headers(app):
@@ -173,7 +176,9 @@ def _register_security_headers(app):
         # after logging out on a shared computer would show the last page.
         # (Browsers' in-memory back-forward cache is handled by page-freshness.js
         # and the Clear-Site-Data header on logout.)
-        if current_user.is_authenticated and not response.headers.get("Cache-Control"):
+        # API responses (temporary passwords, rosters) must never be cached either.
+        private = current_user.is_authenticated or request.path.startswith("/api/")
+        if private and not response.headers.get("Cache-Control"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"  # older browsers and proxies
             response.headers["Expires"] = "0"
