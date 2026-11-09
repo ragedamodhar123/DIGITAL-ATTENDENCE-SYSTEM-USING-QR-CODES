@@ -1,8 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Register your face{% endblock %}
 {% block content %}
+{% if already_registered %}
 <section class="panel panel-narrow">
-  <h1 class="h3 mb-1">Register your face</h1>
-  <p class="mb-0">Face registration is not available yet. You will be able to register your face here before attendance starts.</p>
+  <h1 class="h3 mb-2">Your face is registered</h1>
+  <p>You are ready to mark attendance. If your registration ever needs redoing, ask your faculty to reset it.</p>
+  <a class="btn btn-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
 </section>
+{% else %}
+<section class="panel panel-narrow" id="face-enroll"
+         data-check-url="{{ url_for('face_api.check_photo') }}"
+         data-enroll-url="{{ url_for('face_api.enroll') }}"
+         data-login-url="{{ url_for('auth.login', next=url_for('face.enroll')) }}"
+         data-captures="{{ captures_needed }}">
+  <h1 class="h3 mb-1">Register your face</h1>
+  <p class="text-muted">We take {{ captures_needed }} photos so we can recognise you when you mark attendance.
+     The photos are not kept; only a description of your face is saved.</p>
+
+  <noscript><div class="alert alert-danger">This page needs JavaScript. Turn it on in your browser settings.</div></noscript>
+
+  <div class="camera" data-state="idle">
+    <video class="camera-video" playsinline muted autoplay aria-label="Camera preview"></video>
+    <div class="camera-guide" aria-hidden="true"></div>
+    <div class="camera-placeholder">Camera is off</div>
+  </div>
+
+  <ol class="capture-steps" aria-label="Photos taken">
+    {% for i in range(captures_needed) %}
+      <li class="capture-step" data-step="{{ i }}"><span class="visually-hidden">Photo {{ i + 1 }}</span></li>
+    {% endfor %}
+  </ol>
+
+  <p class="capture-prompt" aria-live="polite">Press "Start camera". Hold your phone at eye level in good light.</p>
+  <div class="alert alert-danger capture-error d-none" role="alert"></div>
+
+  <div class="d-grid gap-2">
+    <button type="button" class="btn btn-primary btn-lg" data-action="start">Start camera</button>
+    <button type="button" class="btn btn-primary btn-lg d-none" data-action="capture">Take photo</button>
+  </div>
+
+  <details class="mt-4 small">
+    <summary>Camera not working?</summary>
+    <ul class="mt-2 mb-0">
+      <li>When the browser asks, choose <strong>Allow</strong> for the camera.</li>
+      <li>If you pressed Block earlier: tap the lock icon next to the address, open Permissions, and allow Camera. Then reload.</li>
+      <li>Close other apps that might be using the camera (video calls, camera app).</li>
+      <li>Use Chrome on Android or Safari on iPhone.</li>
+    </ul>
+  </details>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not already_registered %}
+  <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/face-enroll.js') }}" defer></script>
+{% endif %}
 {% endblock %}

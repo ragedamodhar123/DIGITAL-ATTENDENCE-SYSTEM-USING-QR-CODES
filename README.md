@@ -26,9 +26,15 @@ Done
   username list or whole section, drop, course roster)
 - Module 2, Part 3: admin JSON API under /api/admin (token only, CSRF-exempt); faculty
   course roster page with "New password" for students; Postman collection and environment
+- Module 3, Part 1: face service with OpenCV (YuNet finds faces, SFace compares them):
+  safe image decoding, quality checks, registration from 3 photos, verification;
+  `flask download-face-models` with checksum verification
+- Module 3, Part 2: face registration page (phone camera, 3 guided photos, each checked
+  as it is taken); JSON endpoints /api/face/check and /api/face/enroll; Cloudflare Tunnel
+  for HTTPS on phones
 
 Next
-- Module 3: face registration (camera capture, face embedding, quality checks)
+- Module 3, Part 3: faculty/admin reset of a student's face registration
 - Modules 4 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
@@ -96,7 +102,15 @@ curl -L -o app/static/vendor/bootstrap/bootstrap.min.css https://cdn.jsdelivr.ne
 curl -L -o app/static/vendor/bootstrap/bootstrap.bundle.min.js https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
 ```
 
-7. Optional, development only: add demo data (3 sections, 2 faculty, 10 students,
+7. Install the new packages and download the face models (about 39 MB, checked against
+OpenCV's official checksums):
+
+```bash
+pip install -r requirements.txt
+flask --app wsgi download-face-models
+```
+
+8. Optional, development only: add demo data (3 sections, 2 faculty, 10 students,
 3 courses). All demo users have the password `Demo@12345` and must change it on
 first login. Safe to run more than once.
 
@@ -113,7 +127,8 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 2, Part 3: 418 passed.
+Expected after Module 3, Part 2: 505 passed (9 of them need the face models;
+without the models they show as skipped).
 
 App (development):
 
@@ -150,13 +165,14 @@ attendance-system/
 ├── requirements.txt
 ├── wsgi.py               entry point for flask and waitress
 ├── README.md
+├── models/               face model files (downloaded, not in git)
 ├── migrations/
 │   ├── env.py            Alembic setup (uses the app's database settings)
 │   └── versions/
 │       └── 0001_initial_schema.py   all tables + append-only audit trigger
 ├── app/
 │   ├── __init__.py       app factory: config checks, extensions, CLI, /health
-│   ├── cli.py            flask create-admin, flask seed-demo
+│   ├── cli.py            flask create-admin, seed-demo, download-face-models
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
 │   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
@@ -165,21 +181,26 @@ attendance-system/
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ dashboard
 │   │   ├── faculty/      /faculty/ dashboard, /faculty/courses/<id> roster, issue student passwords
-│   │   └── face/         /face/enroll (placeholder until Module 3)
+│   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
 │   │   ├── css/app.css   colours and layout on top of Bootstrap
 │   │   ├── js/page-freshness.js  reloads logged-in pages restored by the Back button
 │   │   ├── js/confirm-forms.js   asks before submitting forms marked data-confirm
+│   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
+│   │   ├── js/face-enroll.js     camera, guided photos, live checks, registration
 │   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
 │   ├── schemas/          input validation (shape of data) with marshmallow
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
 │   │   ├── user_schemas.py  create/update/list/output shapes for users
-│   │   └── academic_schemas.py  sections, courses, assignment, enrolment, roster
+│   │   ├── academic_schemas.py  sections, courses, assignment, enrolment, roster
+│   │   └── face_schemas.py   photo payloads (data URLs) for the face endpoints
 │   ├── services/         business rules; no Flask request objects inside
 │   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
 │   │   ├── common.py     require_admin, valid_id, commit_or_conflict, escape_like
 │   │   ├── academic_service.py  sections, courses, faculty assignment, enrolment
+│   │   ├── face_engine.py    OpenCV models (YuNet detector, SFace recogniser); thread-safe
+│   │   ├── face_service.py   photo decoding, quality checks, register, verify
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -217,7 +238,13 @@ attendance-system/
     ├── test_user_service.py  user management rules and permissions
     ├── test_academic_service.py  sections, courses, assignment, enrolment, roster
     ├── test_admin_api.py     admin API over HTTP, token on every route
-    └── test_faculty_pages.py faculty roster page, issuing student passwords
+    ├── test_faculty_pages.py faculty roster page, issuing student passwords
+    ├── face_helpers.py       synthetic photos and a stand-in face engine for tests
+    ├── test_face_service.py  face rules with the stand-in engine (no models needed)
+    ├── test_face_models.py   face rules with the REAL models (skipped until downloaded)
+    ├── test_face_cli.py      download-face-models (network faked)
+    ├── test_face_routes.py   face page and /api/face endpoints (stand-in engine)
+    └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
 `postman/` holds the Postman collection and a local environment (see "Using the admin API").
@@ -274,6 +301,76 @@ attendance-system/
   just before class. Repeated attempts are slowed by rate limits instead: 10 per 5 minutes
   for one username from one IP, and 300 per 5 minutes per IP (a whole classroom shares
   one college IP).
+
+
+## Face checks
+
+Every photo goes through the same steps: decode safely (size limits, phone rotation fixed,
+scaled to at most 1280 px), find exactly one clear face (much smaller faces in the
+background are ignored), check quality, then turn the face into 128 numbers. Photos are
+never stored; only the 128 numbers (averaged over 3 registration photos) are kept, with
+the name of the model that produced them.
+
+Thresholds live in `app/config.py` (`FACE_*`) and were calibrated on the official models:
+
+- `FACE_MATCH_THRESHOLD = 0.363`: OpenCV's published value for SFace. Same person scored
+  0.72 to 0.99 in calibration (different lighting, framing, compression); unrelated images
+  about 0.15 to 0.18.
+- `FACE_MIN_SHARPNESS = 25`: measured on the face resized to 112 px, so distance from the
+  camera does not change it. Sharp photos score about 250 to 330; a clearly blurred one 15.
+- `FACE_BRIGHTNESS_RANGE = (40, 225)`, `FACE_MIN_SIZE_PX = 80`, `FACE_ENROL_CAPTURES = 3`.
+
+Registration rules: students register their own face, no approval needed. All 3 photos
+must pass the checks and look like the same person; the exact same file twice is rejected.
+A registered face cannot be replaced by the student; faculty or the admin reset it
+(Module 3, Part 3). If the face model is ever changed, old registrations are detected and
+the student is asked to register again.
+
+If the model files are missing, the app still runs; face features answer
+"Face checks are not available right now" (HTTP 503) until
+`flask --app wsgi download-face-models` is run.
+
+
+## Opening the app on phones (HTTPS with Cloudflare Tunnel)
+
+Phones only allow the camera on `https://` pages. Cloudflare Tunnel gives your laptop a
+temporary public HTTPS address, with nothing to install on the phones.
+
+1. Install cloudflared once (PowerShell or Git Bash):
+   `winget install --id Cloudflare.cloudflared`
+   (or download `cloudflared-windows-amd64.exe` from github.com/cloudflare/cloudflared/releases
+   and rename it to `cloudflared.exe`). Close and reopen the terminal afterwards.
+2. In `.env`, set `TRUSTED_PROXY_COUNT=1`, then start the app as usual:
+   `flask --app wsgi run`
+   Keep the default address (127.0.0.1). Do not use `--host 0.0.0.0` while the tunnel is in
+   use: then only the tunnel can reach Flask, so nobody can fake their IP address.
+3. In a second terminal: `cloudflared tunnel --url http://localhost:5000`
+4. It prints an address like `https://random-words.trycloudflare.com`. Open it on the phone.
+   The address changes every time cloudflared restarts.
+
+Why `TRUSTED_PROXY_COUNT=1`: every request arrives through cloudflared, so without it the
+app thinks all students share one IP address (127.0.0.1), which breaks the per-IP login
+limit and logs. Set it back to 0 when not using the tunnel.
+
+Anyone with the trycloudflare.com link can reach the login page while the tunnel runs.
+That is fine for development and demos; stop cloudflared (Ctrl+C) when finished.
+
+
+## Face registration page
+
+After the first password change, students land on `/face/enroll`:
+
+1. "Start camera" asks for camera permission (front camera, preview shown like a mirror).
+2. The student takes 3 photos with short prompts (look straight, tilt slightly, look
+   straight). Each photo is checked by the server right away (`POST /api/face/check`),
+   so problems like "too dark" or "move closer" are fixed before the next photo.
+3. After the third photo, all 3 go to `POST /api/face/enroll`; the server checks every
+   photo again and saves only the face description. The student is sent to their home page.
+
+The page explains blocked camera permission, a busy camera, a non-HTTPS address, lost
+connection and an expired login, and pauses the camera when the student switches app
+(photos already taken are kept). Photos are sent at most 960 px wide as JPEG.
+Limits: 40 photo checks per 5 minutes and 10 registration attempts per 10 minutes per student.
 
 
 ## Using the admin API (Postman)
@@ -386,6 +483,19 @@ sent to the browser; it goes to the server log.
 - `Error: No such command 'db'`: the virtual environment is not active (`venv\Scripts\activate`).
 - Back button still shows a page after logout: make sure `app/static/js/page-freshness.js`
   exists, then hard-refresh once (Ctrl+F5) so the browser drops the old cached copy.
+- Camera page says it needs a secure (https://) page: open the trycloudflare.com address,
+  not http://127.0.0.1 or your laptop's IP, on the phone.
+- Phone shows "Camera permission was blocked": tap the lock icon next to the address,
+  open Permissions, allow Camera, reload the page.
+- trycloudflare.com page does not load: check both terminals are running (Flask and
+  cloudflared) and that cloudflared printed the address without errors.
+- Every student hits "Too many login attempts" together: `TRUSTED_PROXY_COUNT` is 0 while
+  using the tunnel; set it to 1 and restart Flask.
+- `download-face-models` fails: check the internet connection and run it again; a
+  failed or altered download is discarded, never half-saved. Behind a college proxy, set
+  `HTTPS_PROXY` in the terminal first.
+- Face checks answer "not available right now": the model files are missing or damaged;
+  run `flask --app wsgi download-face-models`.
 - Pages look unstyled (plain text, no colours): Bootstrap was not downloaded. Run the two
   curl commands in setup step 6, then hard-refresh the browser (Ctrl+F5).
 - "This form expired or came from another site": the page was open across a server restart

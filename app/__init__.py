@@ -155,12 +155,13 @@ def _register_error_handlers(app):
 def _register_blueprints(app):
     from .blueprints.admin_api import bp as admin_api_bp
     from .blueprints.auth import bp as auth_bp
+    from .blueprints.face import api_bp as face_api_bp
     from .blueprints.face import bp as face_bp
     from .blueprints.faculty import bp as faculty_bp
     from .blueprints.main import bp as main_bp
     from .blueprints.student import bp as student_bp
 
-    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp, admin_api_bp):
+    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp, face_api_bp, admin_api_bp):
         app.register_blueprint(blueprint)
     # Token-only API: no cookies are used, so CSRF does not apply (see admin_api/__init__.py).
     csrf.exempt(admin_api_bp)
@@ -172,6 +173,8 @@ def _register_security_headers(app):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "same-origin")
+        # Only this site may use the camera; nothing may use the microphone or location.
+        response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
         # Pages for logged-in users must not be cached: otherwise pressing Back
         # after logging out on a shared computer would show the last page.
         # (Browsers' in-memory back-forward cache is handled by page-freshness.js

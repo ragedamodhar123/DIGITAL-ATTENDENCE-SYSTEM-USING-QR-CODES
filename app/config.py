@@ -71,6 +71,8 @@ class BaseConfig:
     FACE_MAX_IMAGE_BYTES = 3 * 1024 * 1024
     FACE_MAX_IMAGE_SIDE = 4096
     FACE_MIN_IMAGE_SIDE = 160
+    FACE_CHECK_RATE_LIMIT = "40 per 5 minutes"   # single-photo checks while registering
+    FACE_ENROL_RATE_LIMIT = "10 per 10 minutes"  # full registration attempts
 
     # Attendance rules (used from Module 4 onward)
     APP_TIMEZONE = "Asia/Kolkata"
