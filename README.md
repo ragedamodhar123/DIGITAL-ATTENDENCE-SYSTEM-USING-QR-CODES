@@ -20,9 +20,12 @@ Done
   decorator, rate-limit keys, consistent JSON/HTML error responses
 - Module 1, Part 3: login, logout and change-password pages; student and faculty dashboards;
   login rate limits; security headers; placeholder face-registration page
+- Module 2, Part 1: input validation schemas; user service (create faculty and students,
+  bulk-create students, edit, deactivate/reactivate, issue temporary passwords)
 
 Next
-- Module 2: admin API (sections, faculty, students, courses, enrolments, issuing credentials)
+- Module 2, Part 2: sections, courses, faculty assignment, enrolment (including bulk)
+- Module 2, Part 3: admin API routes and a Postman collection
 - Modules 3 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
@@ -107,7 +110,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 1, Part 3: 291 passed.
+Expected after Module 2, Part 1: 359 passed.
 
 App (development):
 
@@ -162,11 +165,16 @@ attendance-system/
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
 │   │   ├── css/app.css   colours and layout on top of Bootstrap
+│   │   ├── js/page-freshness.js  reloads logged-in pages restored by the Back button
 │   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
+│   ├── schemas/          input validation (shape of data) with marshmallow
+│   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
+│   │   └── user_schemas.py  create/update/list/output shapes for users
 │   ├── services/         business rules; no Flask request objects inside
 │   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
 │   │   ├── auth_service.py   login, password rules, password change, admin token
-│   │   └── course_service.py course lists for the dashboards
+│   │   ├── course_service.py course lists for the dashboards
+│   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
 │   ├── models/
 │   │   ├── __init__.py   imports every model in one place
 │   │   ├── base.py       timestamp columns, string cleaning
@@ -196,10 +204,12 @@ attendance-system/
     ├── test_auth_service.py  login, password rules, password change, admin token
     ├── test_decorators.py    route protection, admin token, error responses
     ├── test_http_utils.py    safe redirects, rate-limit keys
-    └── test_auth_routes.py   login/logout/change-password pages, dashboards, every route protected
+    ├── test_auth_routes.py   login/logout/change-password pages, dashboards, every route protected
+    ├── test_user_schemas.py  input validation for user management
+    └── test_user_service.py  user management rules and permissions
 ```
 
-Folders such as `app/schemas/` and `postman/` are added by later modules.
+The `postman/` folder is added in Module 2, Part 3.
 (The originally planned `scripts/` folder became the `flask` commands in `app/cli.py`.)
 
 
@@ -242,10 +252,36 @@ Folders such as `app/schemas/` and `postman/` are added by later modules.
 - Changing a password requires the current password, ends every other login
   (session_version + 1), and completes the first-login step (must_change_password = False).
 - Admin API requests use the header `Authorization: Bearer <token>`.
+- Logout deletes the "keep me logged in" cookie as well as the session. (Fixed bug: the
+  session used to be cleared after Flask-Login's logout, which erased its instruction to
+  delete that cookie, so the next request logged the user straight back in.)
+- After logout, the Back button must not show the previous page. Three layers handle this:
+  logged-in pages are sent with `Cache-Control: no-store`; logout sends
+  `Clear-Site-Data: "cache"`; and `static/js/page-freshness.js` reloads any logged-in page
+  the browser restores from its back-forward cache, which then redirects to login.
 - There is no account lockout after failed logins: a classmate could lock someone out
   just before class. Repeated attempts are slowed by rate limits instead: 10 per 5 minutes
   for one username from one IP, and 300 per 5 minutes per IP (a whole classroom shares
   one college IP).
+
+
+## User management rules
+
+- Schemas check the shape of input (types, lengths, formats). Unknown fields are rejected,
+  so a typo like `fullname` is reported instead of silently ignored. Services check the
+  rules (section exists, username free, who may do what).
+- Only the admin creates, edits, lists and deactivates faculty and students.
+- Usernames (roll numbers / staff IDs) and roles cannot be changed after creation: the
+  roll number is the student's identity in every attendance record.
+- Bulk student creation is all or nothing (up to 500 per request). If any row is wrong,
+  nothing is saved and every problem is listed by row number.
+- Temporary passwords look like `k7mp-4qrx-9tdw`: no look-alike characters (0/O, 1/l), easy
+  to read out or write down. They are shown once, stored only as a hash, and force a
+  password change at next login. Issuing one signs the user out everywhere.
+- The admin can issue temporary passwords to any faculty or student. A faculty member can
+  issue them only to students actively enrolled in an active course they teach.
+- Deactivating an account signs it out immediately and blocks login. Nothing is deleted.
+- Admin accounts are invisible to the API; they are managed only with `flask create-admin`.
 
 
 ## Route protection
@@ -283,6 +319,8 @@ sent to the browser; it goes to the server log.
   then upgrade again.
 - Using Git Bash instead of PowerShell: activate with `source venv/Scripts/activate`; all other commands are the same.
 - `Error: No such command 'db'`: the virtual environment is not active (`venv\Scripts\activate`).
+- Back button still shows a page after logout: make sure `app/static/js/page-freshness.js`
+  exists, then hard-refresh once (Ctrl+F5) so the browser drops the old cached copy.
 - Pages look unstyled (plain text, no colours): Bootstrap was not downloaded. Run the two
   curl commands in setup step 6, then hard-refresh the browser (Ctrl+F5).
 - "This form expired or came from another site": the page was open across a server restart

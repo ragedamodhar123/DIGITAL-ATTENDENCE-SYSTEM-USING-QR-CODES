@@ -53,6 +53,7 @@ class User(UserMixin, TimestampMixin, db.Model):
     # PostgreSQL's RESTRICT rule decides (and refuses).
     teaching_links = db.relationship("CourseFaculty", back_populates="faculty", passive_deletes="all")
     enrollments = db.relationship("Enrollment", back_populates="student", passive_deletes="all")
+    face = db.relationship("FaceEmbedding", back_populates="student", uselist=False, passive_deletes="all")
 
     @validates("username", "role")
     def _normalize_lower(self, _key, value):

@@ -11,8 +11,8 @@ TEST_PASSWORD = "Correct-Horse-9"
 _TEST_HASH = hash_password(TEST_PASSWORD)
 
 
-def make_section(code=None, name="Test Section"):
-    section = Section(code=code or f"SEC-{next(_seq)}", name=name)
+def make_section(code=None, name="Test Section", **extra):
+    section = Section(code=code or f"SEC-{next(_seq)}", name=name, **extra)
     db.session.add(section)
     db.session.flush()
     return section

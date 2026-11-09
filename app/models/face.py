@@ -36,7 +36,7 @@ class FaceEmbedding(TimestampMixin, db.Model):
     embedding = db.Column(db.LargeBinary, nullable=False)
     quality = db.Column(db.Float)  # 0..1 score from the detector, for diagnosing bad enrolments
 
-    student = db.relationship("User")
+    student = db.relationship("User", back_populates="face")
 
     def __repr__(self):
         return f"<FaceEmbedding student={self.student_id} model={self.model_name} dim={self.dim}>"
