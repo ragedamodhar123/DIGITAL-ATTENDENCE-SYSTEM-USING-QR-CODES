@@ -34,6 +34,8 @@ def create_app(config_name=None):
     _configure_logging(app)
     _configure_proxy(app)
     _init_extensions(app)
+    _register_auth_handlers()
+    _register_error_handlers(app)
     _register_core_routes(app)
     _register_cli(app)
     return app
@@ -133,6 +135,18 @@ def _init_extensions(app):
     login_manager.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
+
+
+def _register_auth_handlers():
+    from .utils.decorators import handle_unauthorized
+
+    login_manager.unauthorized_handler(handle_unauthorized)
+
+
+def _register_error_handlers(app):
+    from .utils.errors import register_error_handlers
+
+    register_error_handlers(app)
 
 
 def _register_cli(app):

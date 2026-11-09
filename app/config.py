@@ -53,6 +53,9 @@ class BaseConfig:
     RATELIMIT_ENABLED = True
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
     RATELIMIT_HEADERS_ENABLED = True
+    # Applied to the login form in Module 1, part 3 (see app/utils/ratelimit.py).
+    RATELIMIT_LOGIN_PER_USER = "10 per 5 minutes"   # one username from one IP
+    RATELIMIT_LOGIN_PER_IP = "300 per 5 minutes"    # whole classroom behind one college IP
 
     TRUSTED_PROXY_COUNT = _int_env("TRUSTED_PROXY_COUNT", 0)
 

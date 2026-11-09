@@ -16,9 +16,10 @@ Done
 - Module 0, Part 4: Alembic migrations (with the audit trigger), `flask create-admin`, `flask seed-demo`
 - Module 1, Part 1: auth service (login, password rules, password change, admin token check);
   startup guard that keeps test and development databases apart
+- Module 1, Part 2: route protection (role, first-login and face-enrolment gates), admin token
+  decorator, rate-limit keys, consistent JSON/HTML error responses
 
 Next
-- Module 1, Part 2: role decorators, first-login and face-enrolment gates, rate-limit keys
 - Module 1, Part 3: login, logout and change-password pages
 - Modules 2 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
@@ -96,7 +97,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 1, Part 1: 202 passed.
+Expected after Module 1, Part 2: 257 passed.
 
 App (development):
 
@@ -152,6 +153,10 @@ attendance-system/
 │   │   ├── attendance.py sessions, check-ins, records, audit trail, scan log
 │   │   └── face.py       FaceEmbedding (numbers only, no photos)
 │   └── utils/
+│       ├── decorators.py role_required, admin_token_required (route protection)
+│       ├── errors.py     turns errors into JSON (for /api/) or simple pages
+│       ├── http.py       wants_json, safe redirect check for ?next=
+│       ├── ratelimit.py  rate-limit keys (IP + username, per user)
 │       ├── security.py   Argon2 password hashing, API-token hashing
 │       ├── timeutils.py  utcnow() (always timezone-aware)
 │       └── validators.py username format rules (shared by CLI and API)
@@ -166,7 +171,9 @@ attendance-system/
     ├── test_models_face.py
     ├── test_migrations.py    migrations match models, trigger exists, downgrade works
     ├── test_cli.py           create-admin and seed-demo
-    └── test_auth_service.py  login, password rules, password change, admin token
+    ├── test_auth_service.py  login, password rules, password change, admin token
+    ├── test_decorators.py    route protection, admin token, error responses
+    └── test_http_utils.py    safe redirects, rate-limit keys
 ```
 
 Folders such as `app/schemas/`, `app/blueprints/`,
@@ -214,7 +221,26 @@ Folders such as `app/schemas/`, `app/blueprints/`,
   (session_version + 1), and completes the first-login step (must_change_password = False).
 - Admin API requests use the header `Authorization: Bearer <token>`.
 - There is no account lockout after failed logins: a classmate could lock someone out
-  just before class. Repeated attempts are slowed by rate limits instead (Module 1, Part 2).
+  just before class. Repeated attempts are slowed by rate limits instead: 10 per 5 minutes
+  for one username from one IP, and 300 per 5 minutes per IP (a whole classroom shares
+  one college IP).
+
+
+## Route protection
+
+Every route uses exactly one decorator:
+
+- `@role_required(Role.STUDENT)` / `@role_required(Role.FACULTY)` for pages and APIs.
+- `@admin_token_required` for the admin API (Postman). Login cookies are ignored there.
+
+`role_required` checks, in order: logged in, password change done, correct role, and
+(students only) face enrolled. Each failure sends the user to the page that fixes it,
+or returns JSON for `/api/` routes. The change-password page uses
+`allow_pending_password=True`; the face-enrolment page uses `allow_without_face=True`.
+
+All JSON endpoints live under `/api/`. Errors there always look like
+`{"error": "<code>", "message": "...", "details": {...}}`. Internal error text is never
+sent to the browser; it goes to the server log.
 
 
 ## Troubleshooting
