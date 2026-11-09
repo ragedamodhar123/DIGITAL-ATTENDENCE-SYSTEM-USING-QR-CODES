@@ -4,6 +4,8 @@ Schemas check the SHAPE of input (types, lengths, formats, unknown fields).
 Services check the RULES (does the section exist, is the username taken,
 is this person allowed to do this).
 """
+import re
+
 from marshmallow import EXCLUDE, RAISE, Schema, ValidationError, fields, pre_load, validate
 
 from ..services.errors import ValidationFailed
@@ -75,12 +77,17 @@ def code_field(required=True, max_length=32):
     )
 
 
+CODE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9_-]*$")
+
+
 def _code(value, max_length):
     if not isinstance(value, str) or not value.strip():
         raise ValidationError("Enter a code.")
     value = value.strip().upper()
     if len(value) > max_length:
         raise ValidationError(f"Use at most {max_length} characters.")
+    if not CODE_PATTERN.fullmatch(value):
+        raise ValidationError("Use letters, digits, - or _, starting with a letter or digit.")
     return value
 
 

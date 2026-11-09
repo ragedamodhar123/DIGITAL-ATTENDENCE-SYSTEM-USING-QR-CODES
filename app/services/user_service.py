@@ -11,12 +11,12 @@ Temporary passwords are returned once, never stored in plain text, and always
 force a password change at next login.
 """
 from flask import current_app
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from ..extensions import db
 from ..models import Course, CourseFaculty, Enrollment, Role, Section, User
 from ..utils.security import generate_temporary_password, hash_password
+from .common import commit_or_conflict, escape_like, require_admin, valid_id
 from .errors import Conflict, NotFound, PermissionDenied, ValidationFailed
 
 MANAGED_ROLES = (Role.FACULTY, Role.STUDENT)
@@ -30,15 +30,8 @@ _UNIQUE_FIELDS = {
 
 # ---- permission helpers ----------------------------------------------------
 
-def _require_admin(actor):
-    if actor is None or not actor.is_admin or not actor.is_active:
-        raise PermissionDenied("Only the admin can do this.")
-
-
 def _get_managed_user(user_id):
-    # bool is a subclass of int in Python; True must not quietly mean user 1.
-    valid_id = isinstance(user_id, int) and not isinstance(user_id, bool) and user_id > 0
-    user = db.session.get(User, user_id) if valid_id else None
+    user = db.session.get(User, user_id) if valid_id(user_id) else None
     if user is None or user.role not in MANAGED_ROLES:
         # Admin accounts are reported as "not found": the API cannot touch them.
         raise NotFound("User not found.")
@@ -85,19 +78,6 @@ def _active_section(code):
     return section
 
 
-def _commit_or_conflict():
-    """Commit; turn a unique-constraint race into a readable 409 error."""
-    try:
-        db.session.commit()
-    except IntegrityError as exc:
-        db.session.rollback()
-        text = str(exc.orig)
-        for constraint, (field, message) in _UNIQUE_FIELDS.items():
-            if constraint in text:
-                raise Conflict(message, details={field: [message]}) from exc
-        raise
-
-
 def _check_unique(username=None, email=None, exclude_id=None):
     errors = {}
     if username is not None:
@@ -140,21 +120,21 @@ def _log(action, actor, target):
 
 def create_faculty(actor, data):
     """data: validated FacultyCreateSchema. Returns (user, temporary_password)."""
-    _require_admin(actor)
+    require_admin(actor)
     _check_unique(username=data["username"], email=data.get("email"))
     user, temp_password = _new_user(Role.FACULTY, data)
-    _commit_or_conflict()
+    commit_or_conflict(_UNIQUE_FIELDS)
     _log("created faculty", actor, user)
     return user, temp_password
 
 
 def create_student(actor, data):
     """data: validated StudentCreateSchema. Returns (user, temporary_password)."""
-    _require_admin(actor)
+    require_admin(actor)
     section = _active_section(data["section_code"])
     _check_unique(username=data["username"], email=data.get("email"))
     user, temp_password = _new_user(Role.STUDENT, data, section)
-    _commit_or_conflict()
+    commit_or_conflict(_UNIQUE_FIELDS)
     _log("created student", actor, user)
     return user, temp_password
 
@@ -167,7 +147,7 @@ def bulk_create_students(actor, rows):
     the admin can fix the whole file in one go.
     Returns a list of (user, temporary_password) in input order.
     """
-    _require_admin(actor)
+    require_admin(actor)
     errors = {}
 
     def add_error(index, field, message):
@@ -217,7 +197,7 @@ def bulk_create_students(actor, rows):
         )
 
     created = [_new_user(Role.STUDENT, row, sections[row["section_code"]]) for row in rows]
-    _commit_or_conflict()
+    commit_or_conflict(_UNIQUE_FIELDS)
     current_app.logger.info("bulk created %d students by %s", len(created), actor.username)
     return created
 
@@ -225,17 +205,13 @@ def bulk_create_students(actor, rows):
 # ---- read ------------------------------------------------------------------
 
 def get_user(actor, user_id):
-    _require_admin(actor)
+    require_admin(actor)
     return _get_managed_user(user_id)
-
-
-def _escape_like(text):
-    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def list_users(actor, filters):
     """filters: validated UserListQuerySchema. Returns (users, total)."""
-    _require_admin(actor)
+    require_admin(actor)
     query = User.query.filter(User.role.in_(MANAGED_ROLES)).options(
         selectinload(User.section), selectinload(User.face)
     )
@@ -247,7 +223,7 @@ def list_users(actor, filters):
         query = query.filter(User.is_active.is_(filters["active"]))
     if filters.get("q"):
         # Escape % and _ so a search for "_" does not match everything.
-        pattern = f"%{_escape_like(filters['q'].strip())}%"
+        pattern = f"%{escape_like(filters['q'].strip())}%"
         query = query.filter(
             db.or_(User.username.ilike(pattern, escape="\\"), User.full_name.ilike(pattern, escape="\\"))
         )
@@ -262,7 +238,7 @@ def list_users(actor, filters):
 
 def update_user(actor, user_id, data):
     """data: validated UserUpdateSchema (only the fields sent)."""
-    _require_admin(actor)
+    require_admin(actor)
     user = _get_managed_user(user_id)
     if not data:
         raise ValidationFailed("Nothing to update.", details={"_body": ["Send at least one field to change."]})
@@ -282,14 +258,14 @@ def update_user(actor, user_id, data):
     if "full_name" in data:
         user.full_name = data["full_name"]
 
-    _commit_or_conflict()
+    commit_or_conflict(_UNIQUE_FIELDS)
     _log("updated", actor, user)
     return user
 
 
 def set_active(actor, user_id, active):
     """Deactivate (signs the user out everywhere, blocks login) or reactivate."""
-    _require_admin(actor)
+    require_admin(actor)
     user = _get_managed_user(user_id)
     if user.is_active == active:
         return user  # already in that state; nothing to do

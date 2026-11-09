@@ -22,9 +22,10 @@ Done
   login rate limits; security headers; placeholder face-registration page
 - Module 2, Part 1: input validation schemas; user service (create faculty and students,
   bulk-create students, edit, deactivate/reactivate, issue temporary passwords)
+- Module 2, Part 2: academic service (sections, courses, faculty assignment, enrolment by
+  username list or whole section, drop, course roster)
 
 Next
-- Module 2, Part 2: sections, courses, faculty assignment, enrolment (including bulk)
 - Module 2, Part 3: admin API routes and a Postman collection
 - Modules 3 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
@@ -110,7 +111,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 2, Part 1: 359 passed.
+Expected after Module 2, Part 2: 392 passed.
 
 App (development):
 
@@ -169,9 +170,12 @@ attendance-system/
 │   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
 │   ├── schemas/          input validation (shape of data) with marshmallow
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
-│   │   └── user_schemas.py  create/update/list/output shapes for users
+│   │   ├── user_schemas.py  create/update/list/output shapes for users
+│   │   └── academic_schemas.py  sections, courses, assignment, enrolment, roster
 │   ├── services/         business rules; no Flask request objects inside
 │   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
+│   │   ├── common.py     require_admin, valid_id, commit_or_conflict, escape_like
+│   │   ├── academic_service.py  sections, courses, faculty assignment, enrolment
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -206,7 +210,8 @@ attendance-system/
     ├── test_http_utils.py    safe redirects, rate-limit keys
     ├── test_auth_routes.py   login/logout/change-password pages, dashboards, every route protected
     ├── test_user_schemas.py  input validation for user management
-    └── test_user_service.py  user management rules and permissions
+    ├── test_user_service.py  user management rules and permissions
+    └── test_academic_service.py  sections, courses, assignment, enrolment, roster
 ```
 
 The `postman/` folder is added in Module 2, Part 3.
@@ -282,6 +287,26 @@ The `postman/` folder is added in Module 2, Part 3.
   issue them only to students actively enrolled in an active course they teach.
 - Deactivating an account signs it out immediately and blocks login. Nothing is deleted.
 - Admin accounts are invisible to the API; they are managed only with `flask create-admin`.
+
+
+## Academic data rules
+
+- Only the admin changes sections, courses, faculty assignments and enrolments. A faculty
+  member can view the roster of a course they teach.
+- Codes (sections, courses, terms) are stored uppercase and may contain letters, digits,
+  `-` and `_`. A course code can repeat in different terms (DS301 in 2026-ODD and 2027-ODD).
+  Codes can be corrected later; records point to ids, so history is not affected.
+- Nothing is deleted. Sections and courses are retired (`is_active = False`). A retired
+  course is read-only and disappears from dashboards; restoring it brings everything back.
+- Enrolling by username list is all or nothing: if any username is unknown, not a student,
+  or deactivated, nobody is enrolled and every problem is listed. Repeated usernames are
+  ignored. Already-enrolled students are reported, not treated as errors.
+- Enrolling a whole section adds all its active students in one step (the usual way
+  colleges enrol a class). Deactivated students are skipped.
+- Dropping a student keeps the enrolment row (inactive) for history. Enrolling them again
+  reuses the same row.
+- Assigning the same faculty twice is harmless. Unassigning a faculty member also removes
+  their right to issue passwords to that course's students.
 
 
 ## Route protection
