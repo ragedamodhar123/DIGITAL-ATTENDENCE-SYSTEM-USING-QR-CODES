@@ -3,6 +3,7 @@
 create-admin          First admin account and its API token (for Postman).
 seed-demo             Demo sections, faculty, students, courses and enrolments.
 download-face-models  The two OpenCV face model files (about 39 MB), checksum-verified.
+close-expired-sessions  Close attendance sessions left open past their time limit.
 
 These are Flask commands rather than loose scripts so they automatically
 load .env, use the same config checks as the app, and can be tested.
@@ -25,6 +26,7 @@ def register_cli(app):
     app.cli.add_command(create_admin)
     app.cli.add_command(seed_demo)
     app.cli.add_command(download_face_models)
+    app.cli.add_command(close_expired_sessions_command)
 
 
 # ---- create-admin --------------------------------------------------------
@@ -275,3 +277,14 @@ def _remove_quietly(path):
         os.remove(path)
     except OSError:
         pass
+
+
+# ---- close-expired-sessions ----------------------------------------------
+
+@click.command("close-expired-sessions")
+def close_expired_sessions_command():
+    """Close attendance sessions that ran past their time limit (safe to run any time)."""
+    from .services.session_service import close_expired_sessions
+
+    closed = close_expired_sessions()
+    click.echo(f"Closed {closed} expired session(s).")

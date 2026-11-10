@@ -34,9 +34,13 @@ Done
   for HTTPS on phones
 - Module 3, Part 3: faculty/admin reset of a student's face registration (reason required);
   account history table (face resets, issued passwords, deactivation) with migration 0002
+- Module 4, Part 1: session service (start, stop, auto-close, absentees filled in on close);
+  `flask close-expired-sessions`; college-time dates (tzdata)
 
 Next
-- Module 4: attendance sessions (rotating QR code, scan, face check, marking)
+- Module 4, Part 2: rotating QR code and the faculty attendance screen
+- Module 4, Part 3: student scan and check-in
+- Module 4, Part 4: face check and marking present
 - Modules 5 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
@@ -104,7 +108,7 @@ curl -L -o app/static/vendor/bootstrap/bootstrap.min.css https://cdn.jsdelivr.ne
 curl -L -o app/static/vendor/bootstrap/bootstrap.bundle.min.js https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
 ```
 
-7. Install the new packages and download the face models (about 39 MB, checked against
+7. Install the new packages (whenever requirements.txt changes) and download the face models (about 39 MB, checked against
 OpenCV's official checksums):
 
 ```bash
@@ -129,7 +133,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 3, Part 3: 530 passed (9 of them need the face models;
+Expected after Module 4, Part 1: 563 passed (9 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -175,7 +179,7 @@ attendance-system/
 │       └── 0002_account_events.py   account history table + append-only trigger
 ├── app/
 │   ├── __init__.py       app factory: config checks, extensions, CLI, /health
-│   ├── cli.py            flask create-admin, seed-demo, download-face-models
+│   ├── cli.py            flask create-admin, seed-demo, download-face-models, close-expired-sessions
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
 │   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
@@ -204,6 +208,7 @@ attendance-system/
 │   │   ├── academic_service.py  sections, courses, faculty assignment, enrolment
 │   │   ├── face_engine.py    OpenCV models (YuNet detector, SFace recogniser); thread-safe
 │   │   ├── face_service.py   photo decoding, quality checks, register, verify
+│   │   ├── session_service.py  start/stop attendance, auto-close, absentees, counts
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -221,7 +226,7 @@ attendance-system/
 │       ├── http.py       wants_json, safe redirect check for ?next=
 │       ├── ratelimit.py  rate-limit keys (IP + username, per user)
 │       ├── security.py   Argon2 password hashing, API-token hashing
-│       ├── timeutils.py  utcnow() (always timezone-aware)
+│       ├── timeutils.py  utcnow(), local_date() in college time (Asia/Kolkata)
 │       └── validators.py username format rules (shared by CLI and API)
 └── tests/
     ├── conftest.py       builds the test database by running the real migrations
@@ -249,6 +254,7 @@ attendance-system/
     ├── test_face_cli.py      download-face-models (network faked)
     ├── test_face_routes.py   face page and /api/face endpoints (stand-in engine)
     ├── test_face_reset.py    face reset (service, admin API, faculty page), account history
+    ├── test_session_service.py  start/stop rules, races, auto-close, absentees, counts
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -392,6 +398,28 @@ deleted, even from pgAdmin. The admin reads it with `GET /api/admin/users/<id>/h
 (newest first). Passwords themselves are never recorded.
 
 
+## Attendance sessions
+
+- Only a faculty member assigned to the course starts or stops its attendance; a co-teacher
+  can stop a session the other started.
+- One open session per course. Pressing Start again, or a co-teacher pressing it, returns
+  the session already open. Two simultaneous clicks still create only one (the database
+  decides; tested with real parallel requests).
+- One running session per faculty member at a time, and a course needs at least one
+  enrolled, active student.
+- Two lectures on the same day are two separate sessions.
+- Each session gets its own random secret (used to sign its QR codes in Part 2).
+- `session_date` is the class date in college time; all timestamps are stored in UTC.
+- Sessions close themselves 120 minutes after starting (`SESSION_MAX_MINUTES`), and are
+  recorded as ending at that time. No background job is needed: overdue sessions are closed
+  whenever any session action runs. For a scheduled clean-up, run
+  `flask --app wsgi close-expired-sessions` (safe to run any time).
+- On closing, every actively enrolled student with an active account and no record is marked
+  absent (`auto_absent`), unfinished check-ins are discarded, and totals are fixed: students
+  enrolled later never appear as absent in older sessions. A student marked present stays
+  present even if dropped later. Stopping twice is harmless.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -511,6 +539,8 @@ sent to the browser; it goes to the server log.
   cloudflared) and that cloudflared printed the address without errors.
 - Every student hits "Too many login attempts" together: `TRUSTED_PROXY_COUNT` is 0 while
   using the tunnel; set it to 1 and restart Flask.
+- `ZoneInfoNotFoundError: 'No time zone found with key Asia/Kolkata'`: the `tzdata` package
+  is missing (Windows has no built-in timezone data). Run `pip install -r requirements.txt`.
 - `download-face-models` fails: check the internet connection and run it again; a
   failed or altered download is discarded, never half-saved. Behind a college proxy, set
   `HTTPS_PROXY` in the terminal first.

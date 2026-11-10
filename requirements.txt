@@ -28,4 +28,8 @@ opencv-python-headless>=4.10,<5
 numpy>=1.26,<3
 Pillow>=10.0
 
+# Timezone data. Windows has no built-in timezone database, so ZoneInfo("Asia/Kolkata")
+# needs this package there.
+tzdata>=2024.1
+
 # Added in later modules: qrcode, pandas, openpyxl
