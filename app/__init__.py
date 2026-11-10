@@ -166,6 +166,7 @@ def _register_error_handlers(app):
 
 def _register_blueprints(app):
     from .blueprints.admin_api import bp as admin_api_bp
+    from .blueprints.attend import api_bp as attend_api_bp
     from .blueprints.attend import bp as attend_bp
     from .blueprints.auth import bp as auth_bp
     from .blueprints.face import api_bp as face_api_bp
@@ -176,7 +177,8 @@ def _register_blueprints(app):
     from .blueprints.student import bp as student_bp
 
     for blueprint in (
-        auth_bp, main_bp, student_bp, attend_bp, faculty_bp, faculty_api_bp, face_bp, face_api_bp, admin_api_bp
+        auth_bp, main_bp, student_bp, attend_bp, attend_api_bp,
+        faculty_bp, faculty_api_bp, face_bp, face_api_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
     # Token-only API: no cookies are used, so CSRF does not apply (see admin_api/__init__.py).

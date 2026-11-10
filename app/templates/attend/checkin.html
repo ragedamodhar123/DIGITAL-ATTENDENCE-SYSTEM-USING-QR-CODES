@@ -28,11 +28,43 @@
     <a class="btn btn-outline-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
 
   {% else %}
-    <h1 class="h3 mb-1">Code accepted</h1>
-    <p class="text-muted">{{ result.course.code }} {{ result.course.name }}</p>
-    <div class="alert alert-info mb-0" id="checkin-ready" data-session-id="{{ result.session.id }}" data-seconds="{{ seconds_left }}">
-      Next: a quick face check. Finish it within {{ seconds_left }} seconds, or scan the code again.
+    <div id="attend-face"
+         data-session-id="{{ result.session.id }}"
+         data-face-url="{{ url_for('attend_api.face_check', session_id=result.session.id) }}"
+         data-scan-url="{{ url_for('student.scan') }}"
+         data-home-url="{{ url_for('student.dashboard') }}"
+         data-seconds="{{ seconds_left }}">
+      <h1 class="h3 mb-1" data-field="title">Face check</h1>
+      <p class="text-muted mb-3">{{ result.course.code }} {{ result.course.name }}</p>
+
+      <noscript><div class="alert alert-danger">This page needs JavaScript for the face check.</div></noscript>
+
+      <div class="camera camera-small" data-state="idle">
+        <video class="camera-video" playsinline muted autoplay aria-label="Camera preview"></video>
+        <div class="camera-guide" aria-hidden="true"></div>
+        <div class="camera-placeholder">Camera is off</div>
+      </div>
+
+      <p class="capture-prompt" aria-live="polite">Press "Start camera" and look straight at it.</p>
+      <p class="checkin-timer small text-muted text-center" aria-live="off">Time left: <span data-field="seconds">{{ seconds_left }}</span> s</p>
+      <div class="alert alert-danger capture-error d-none" role="alert"></div>
+      <div class="alert alert-success checkin-done d-none" role="status"></div>
+
+      <div class="d-grid gap-2">
+        <button type="button" class="btn btn-primary btn-lg" data-action="start">Start camera</button>
+        <button type="button" class="btn btn-primary btn-lg d-none" data-action="capture">Check my face</button>
+        <a class="btn btn-outline-primary btn-lg d-none" data-action="rescan" href="{{ url_for('student.scan') }}">Scan the code again</a>
+        <a class="btn btn-outline-primary btn-lg d-none" data-action="home" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+      </div>
     </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+{% if result and result.status == "ready" %}
+  <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/attend-face.js') }}" defer></script>
+{% endif %}
 {% endblock %}

@@ -76,6 +76,8 @@ class BaseConfig:
 
     # Attendance rules (used from Module 4 onward)
     SCAN_RATE_LIMIT = "30 per 5 minutes"  # QR scans per student
+    FACE_CHECK_ATTEMPTS = 3                 # face mismatches allowed per check-in
+    FACE_VERIFY_RATE_LIMIT = "20 per 5 minutes"  # face-check photos per student
     # Optional: only accept scans from these networks, e.g. "203.0.113.0/24,198.51.100.7".
     # Empty = any network. With Cloudflare Tunnel this is the phone's public IP address.
     ATTENDANCE_ALLOWED_NETWORKS = [

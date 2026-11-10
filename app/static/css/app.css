@@ -187,6 +187,10 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 .qr-reader video { width: 100% !important; height: auto !important; display: block; }
 .scan-status { min-height: 1.5rem; }
 
+/* Attendance face check: a smaller camera so the buttons stay on screen */
+.camera-small { max-height: 45vh; }
+.checkin-timer { margin-top: -.5rem; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

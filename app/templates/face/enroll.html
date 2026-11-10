@@ -55,6 +55,7 @@
 {% block scripts %}
 {% if not already_registered %}
   <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/face-enroll.js') }}" defer></script>
 {% endif %}
 {% endblock %}

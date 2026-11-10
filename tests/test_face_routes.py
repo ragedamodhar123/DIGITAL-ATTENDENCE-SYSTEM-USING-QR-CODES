@@ -36,7 +36,7 @@ def test_new_student_sees_camera_page(client, engine):
     _student(client)
     page = client.get("/face/enroll").data.decode()
     assert 'id="face-enroll"' in page and 'data-captures="3"' in page
-    assert "face-enroll.js" in page and "api.js" in page
+    assert "face-enroll.js" in page and "api.js" in page and "camera.js" in page
     assert 'name="csrf-token"' in page
 
 
@@ -176,4 +176,5 @@ def test_registration_attempts_are_rate_limited(client, engine):
 
 def test_static_scripts_are_served(client):
     assert b"postJSON" in client.get("/static/js/api.js").data
-    assert b"getUserMedia" in client.get("/static/js/face-enroll.js").data
+    assert b"AttendanceCamera" in client.get("/static/js/face-enroll.js").data
+    assert b"getUserMedia" in client.get("/static/js/camera.js").data  # shared camera code

@@ -40,10 +40,12 @@ Done
   screen with live counts, latest check-ins, full screen, Stop; start button on course page
 - Module 4, Part 3: student check-in at /a/<code> (works from the phone camera app), in-app
   scanner page, "attendance is open" on the student home, scan log, optional network rule
+- Module 4, Part 4: face check after the scan and marking present (once per session, 3 face
+  attempts per check-in, safe under double taps and Stop at the same moment); shared camera.js
 
 Next
-- Module 4, Part 4: face check and marking present
-- Modules 5 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 5: faculty results, manual marking and edits for any date (with reasons, audited)
+- Modules 6 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -142,7 +144,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 4, Part 3: 627 passed (9 of them need the face models;
+Expected after Module 4, Part 4: 652 passed (9 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -196,7 +198,7 @@ attendance-system/
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ home (open attendance, scan button), /student/scan scanner
-│   │   ├── attend/       /a/<code>: the page the QR link opens (check-in)
+│   │   ├── attend/       /a/<code> check-in page (routes.py); /api/attendance face check (api.py)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
 │   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
@@ -206,7 +208,9 @@ attendance-system/
 │   │   ├── js/page-freshness.js  reloads logged-in pages restored by the Back button
 │   │   ├── js/confirm-forms.js   asks before submitting forms marked data-confirm
 │   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
-│   │   ├── js/face-enroll.js     camera, guided photos, live checks, registration
+│   │   ├── js/camera.js          shared front-camera helpers (start, stop, take a photo, errors)
+│   │   ├── js/face-enroll.js     guided registration photos, live checks
+│   │   ├── js/attend-face.js     face check after scanning: countdown, attempts, result
 │   │   ├── js/faculty-session.js live QR screen: polling, countdown, offline handling
 │   │   ├── js/student-scan.js    in-app QR scanner; opens only this site's /a/<code> links
 │   │   └── vendor/       bootstrap/ and html5-qrcode/ (downloaded, setup step 6)
@@ -224,6 +228,7 @@ attendance-system/
 │   │   ├── session_service.py  start/stop attendance, auto-close, absentees, counts
 │   │   ├── qr_service.py     signed rotating codes, QR as SVG
 │   │   ├── checkin_service.py  scan checks, pending check-in, scan log, network rule
+│   │   ├── attendance_service.py  face check after the scan, marking present
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -274,6 +279,8 @@ attendance-system/
     ├── test_faculty_sessions.py  start/stop pages, live endpoint, permissions
     ├── test_checkin_service.py   scan checks, pending check-in, scan log, network rule
     ├── test_checkin_routes.py    /a/<code> page, scanner page, student home
+    ├── test_attendance_service.py  face check, attempts, timing, marking present
+    ├── test_attend_face_routes.py  face-check endpoint and a full class end to end
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -502,6 +509,34 @@ Through Cloudflare Tunnel the address checked is the phone's public IP, so ask t
 IT team for the Wi-Fi's public address range. Students on mobile data will be refused.
 
 
+## Face check and marking present
+
+After a scan is accepted, the check-in page becomes the face check: "Start camera" (front
+camera), "Check my face", and a 60-second countdown. One photo is compared with the
+student's OWN registered face; on a match the student is marked present and sees
+"You are marked present for DS301 ... at 10:42". The faculty screen count goes up within
+about 2 seconds.
+
+- Marked at most once per session: the database's unique rule plus row locks. Two taps at
+  the same moment both answer "present" and only one record exists (tested with real
+  parallel requests).
+- Pressing Stop while a student's face is being checked: the student ends up with exactly
+  one record, either present (the check finished first) or absent (Stop came first). No
+  deadlock (tested in parallel; the session row is always locked before the check-in row).
+- A friend holding their face up to your phone (logged in as you) fails: only your own
+  registered face can match.
+- 3 mismatches per check-in (`FACE_CHECK_ATTEMPTS`); rescanning the code does not reset the
+  count. After that the student is told to ask the faculty, who can mark them manually
+  (Module 5). A photo that cannot be checked (too dark, no face, ...) does not use an attempt.
+- Finished after 60 seconds, after attendance stops, or for a student with no scan: refused
+  with a clear message and a "Scan the code again" or "Go home" button.
+- Each attempt is logged in `scan_logs` with `event = 'face'` and an outcome (`matched`,
+  `face_mismatch`, `too_many_attempts`, `photo_<problem>`, `checkin_expired`, ...), with the
+  similarity score. The present record keeps the face distance as evidence.
+- Limit: 20 face photos per 5 minutes per student. Endpoint:
+  `POST /api/attendance/sessions/<id>/face` with `{"image": "data:image/jpeg;base64,..."}`.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -625,6 +660,9 @@ sent to the browser; it goes to the server log.
   http://127.0.0.1 or localhost. Open it through the trycloudflare.com address instead.
 - QR code blurred with "Code out of date": the laptop lost its connection to the server
   (or the tunnel stopped). Check the Wi-Fi and that both terminals are running.
+- Student says "Your face did not match" in normal light: check their registration was
+  good (faculty course page shows "Ready"); if needed reset the face and let them register
+  again in good light. Repeated mismatches show in `scan_logs` with the similarity score.
 - Scanner page says "The scanner is not available": `html5-qrcode.min.js` is missing from
   `app/static/vendor/html5-qrcode/` (setup step 6). Students can still use the camera app.
 - Every scan says "Connect to the college Wi-Fi": `ATTENDANCE_ALLOWED_NETWORKS` does not

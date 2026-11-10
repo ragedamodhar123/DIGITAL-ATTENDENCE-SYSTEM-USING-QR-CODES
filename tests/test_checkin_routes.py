@@ -42,8 +42,9 @@ def test_scan_link_accepts_code_and_starts_check_in(client, live):
     resp = client.get(f"/a/{_code(session)}")
     page = resp.data.decode()
     assert resp.status_code == 200
-    assert "Code accepted" in page and "DS301 Data Structures" in page
+    assert "Face check" in page and "DS301 Data Structures" in page
     assert f'data-session-id="{session.id}"' in page
+    assert f"/api/attendance/sessions/{session.id}/face" in page
     assert PendingCheckin.query.filter_by(student_id=student.id).count() == 1
 
 
