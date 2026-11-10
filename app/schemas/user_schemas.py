@@ -59,3 +59,10 @@ class UserOutSchema(StrictSchema):
     face_enrolled = fields.Function(lambda u: u.face is not None if u.is_student else None)
     created_at = fields.DateTime()
     last_login_at = fields.DateTime(allow_none=True)
+
+
+class AccountEventOutSchema(StrictSchema):
+    event = fields.String()
+    reason = fields.String(allow_none=True)
+    by = fields.Function(lambda e: e.actor.username)
+    at = fields.DateTime(attribute="created_at")

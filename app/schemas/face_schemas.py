@@ -22,3 +22,7 @@ class FaceCheckSchema(StrictSchema):
 
 class FaceEnrolSchema(StrictSchema):
     images = fields.List(_data_url(), required=True, validate=validate.Length(min=1, max=10))
+
+
+class FaceResetSchema(StrictSchema):
+    reason = fields.String(required=True, validate=validate.Length(min=3, max=200))

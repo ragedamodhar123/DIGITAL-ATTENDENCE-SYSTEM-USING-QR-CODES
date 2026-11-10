@@ -32,10 +32,12 @@ Done
 - Module 3, Part 2: face registration page (phone camera, 3 guided photos, each checked
   as it is taken); JSON endpoints /api/face/check and /api/face/enroll; Cloudflare Tunnel
   for HTTPS on phones
+- Module 3, Part 3: faculty/admin reset of a student's face registration (reason required);
+  account history table (face resets, issued passwords, deactivation) with migration 0002
 
 Next
-- Module 3, Part 3: faculty/admin reset of a student's face registration
-- Modules 4 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 4: attendance sessions (rotating QR code, scan, face check, marking)
+- Modules 5 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -127,7 +129,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 3, Part 2: 505 passed (9 of them need the face models;
+Expected after Module 3, Part 3: 530 passed (9 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -169,7 +171,8 @@ attendance-system/
 ├── migrations/
 │   ├── env.py            Alembic setup (uses the app's database settings)
 │   └── versions/
-│       └── 0001_initial_schema.py   all tables + append-only audit trigger
+│       ├── 0001_initial_schema.py   all tables + append-only audit trigger
+│       └── 0002_account_events.py   account history table + append-only trigger
 ├── app/
 │   ├── __init__.py       app factory: config checks, extensions, CLI, /health
 │   ├── cli.py            flask create-admin, seed-demo, download-face-models
@@ -180,7 +183,7 @@ attendance-system/
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ dashboard
-│   │   ├── faculty/      /faculty/ dashboard, /faculty/courses/<id> roster, issue student passwords
+│   │   ├── faculty/      /faculty/ dashboard, /faculty/courses/<id> roster, student passwords, face reset
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
@@ -208,6 +211,7 @@ attendance-system/
 │   │   ├── __init__.py   imports every model in one place
 │   │   ├── base.py       timestamp columns, string cleaning
 │   │   ├── user.py       User, Role, Flask-Login user loader
+│   │   ├── account.py    AccountEvent: who reset a face, issued a password, (de)activated
 │   │   ├── academic.py   Section, Course, CourseFaculty, Enrollment
 │   │   ├── attendance.py sessions, check-ins, records, audit trail, scan log
 │   │   └── face.py       FaceEmbedding (numbers only, no photos)
@@ -244,6 +248,7 @@ attendance-system/
     ├── test_face_models.py   face rules with the REAL models (skipped until downloaded)
     ├── test_face_cli.py      download-face-models (network faked)
     ├── test_face_routes.py   face page and /api/face endpoints (stand-in engine)
+    ├── test_face_reset.py    face reset (service, admin API, faculty page), account history
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -322,8 +327,13 @@ Thresholds live in `app/config.py` (`FACE_*`) and were calibrated on the officia
 
 Registration rules: students register their own face, no approval needed. All 3 photos
 must pass the checks and look like the same person; the exact same file twice is rejected.
-A registered face cannot be replaced by the student; faculty or the admin reset it
-(Module 3, Part 3). If the face model is ever changed, old registrations are detected and
+A registered face cannot be replaced by the student (so nobody can quietly swap in their
+own face on a borrowed phone).
+
+Resetting a registration: the admin can reset any student (`POST /api/admin/users/<id>/face/reset`
+with a `reason`); a faculty member can reset students actively enrolled in a course they
+teach (course page, "Actions", "Reset face", with a reason). The registration is deleted and
+the student is sent to register again on their next page. They are not logged out. If the face model is ever changed, old registrations are detected and
 the student is asked to register again.
 
 If the model files are missing, the app still runs; face features answer
@@ -373,6 +383,15 @@ connection and an expired login, and pauses the camera when the student switches
 Limits: 40 photo checks per 5 minutes and 10 registration attempts per 10 minutes per student.
 
 
+## Account history
+
+`account_events` records who did what to an account, and when: face resets (with the
+required reason), temporary passwords issued, deactivation and reactivation. Like the
+attendance audit, a PostgreSQL trigger makes it append-only: rows cannot be changed or
+deleted, even from pgAdmin. The admin reads it with `GET /api/admin/users/<id>/history`
+(newest first). Passwords themselves are never recorded.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -389,7 +408,8 @@ usernames in the body to create new records.
 Endpoints (all under `/api/admin`, all need `Authorization: Bearer <token>`):
 
 - People: `POST /faculty`, `POST /students`, `POST /students/bulk`, `GET /users`,
-  `GET|PATCH /users/<id>`, `POST /users/<id>/deactivate|activate|temporary-password`
+  `GET|PATCH /users/<id>`, `POST /users/<id>/deactivate|activate|temporary-password`,
+  `POST /users/<id>/face/reset` (body `reason`), `GET /users/<id>/history`
 - Sections: `GET|POST /sections`, `PATCH /sections/<id>`, `POST /sections/<id>/retire|restore`
 - Courses: `GET|POST /courses`, `GET|PATCH /courses/<id>`, `POST /courses/<id>/retire|restore`
 - Teaching: `POST /courses/<id>/faculty` (body `username`), `DELETE /courses/<id>/faculty/<username>`

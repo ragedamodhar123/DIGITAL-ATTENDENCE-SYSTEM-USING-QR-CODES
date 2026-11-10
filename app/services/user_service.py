@@ -14,7 +14,7 @@ from flask import current_app
 from sqlalchemy.orm import selectinload
 
 from ..extensions import db
-from ..models import Course, CourseFaculty, Enrollment, Role, Section, User
+from ..models import AccountEventType, Course, CourseFaculty, Enrollment, Role, Section, User, record_event
 from ..utils.security import generate_temporary_password, hash_password
 from .common import commit_or_conflict, escape_like, require_admin, valid_id
 from .errors import Conflict, NotFound, PermissionDenied, ValidationFailed
@@ -272,6 +272,7 @@ def set_active(actor, user_id, active):
     user.is_active = active
     if not active:
         user.session_version += 1  # every open session ends on its next request
+    record_event(user, actor, AccountEventType.ACTIVATED if active else AccountEventType.DEACTIVATED)
     db.session.commit()
     _log("activated" if active else "deactivated", actor, user)
     return user
@@ -301,6 +302,21 @@ def issue_temporary_password(actor, user_id):
     target.password_hash = hash_password(temp_password)
     target.must_change_password = True
     target.session_version += 1
+    record_event(target, actor, AccountEventType.PASSWORD_ISSUED)
     db.session.commit()
     _log("issued temporary password", actor, target)
     return target, temp_password
+
+
+def account_history(actor, user_id):
+    """Who did what to this account, newest first (admin only)."""
+    from ..models import AccountEvent
+
+    require_admin(actor)
+    user = _get_managed_user(user_id)
+    events = (
+        AccountEvent.query.filter_by(user_id=user.id)
+        .order_by(AccountEvent.created_at.desc(), AccountEvent.id.desc())
+        .all()
+    )
+    return user, events

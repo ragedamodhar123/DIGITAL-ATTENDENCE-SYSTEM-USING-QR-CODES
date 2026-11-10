@@ -25,8 +25,9 @@ from flask import current_app
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from ..extensions import db
-from ..models import FaceEmbedding
-from .errors import Conflict, PermissionDenied, ServiceError, ValidationFailed
+from ..models import AccountEventType, FaceEmbedding, User, record_event
+from .common import valid_id
+from .errors import Conflict, NotFound, PermissionDenied, ServiceError, ValidationFailed
 from .face_engine import EMBEDDING_DIM, MODEL_NAME, OpenCVFaceEngine
 
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
@@ -300,3 +301,50 @@ def verify(student, image_data, engine=None):
     score = similarity(sample.embedding, from_bytes(record.embedding))
     matched = score >= current_app.config["FACE_MATCH_THRESHOLD"]
     return VerifyResult(matched=matched, similarity=score, distance=max(0.0, 1.0 - score))
+
+
+# ---- reset -----------------------------------------------------------------
+
+RESET_REASON_MIN = 3
+RESET_REASON_MAX = 200
+
+
+def can_reset_face(actor, student):
+    """Admin: any student. Faculty: students actively enrolled in an active course they teach."""
+    from .user_service import faculty_teaches_student
+
+    if actor is None or not actor.is_active or student is None or not student.is_student:
+        return False
+    if actor.is_admin:
+        return True
+    return actor.is_faculty and faculty_teaches_student(actor, student)
+
+
+def reset_face(actor, student_id, reason):
+    """Delete a student's face registration so they register again at next login.
+
+    The reason is required and recorded with who reset it and when
+    (account_events). The student is not logged out: on their next page they
+    are simply sent to the registration page.
+    """
+    student = db.session.get(User, student_id) if valid_id(student_id) else None
+    if student is None or not student.is_student:
+        raise NotFound("Student not found.")
+    if not can_reset_face(actor, student):
+        raise PermissionDenied("You can only reset the face of students in courses you teach.")
+
+    reason = reason.strip() if isinstance(reason, str) else ""
+    if not RESET_REASON_MIN <= len(reason) <= RESET_REASON_MAX:
+        raise ValidationFailed(
+            "Give a reason.",
+            details={"reason": [f"Say why the face is being reset ({RESET_REASON_MIN}-{RESET_REASON_MAX} characters)."]},
+        )
+    if student.face is None:
+        raise NotFound(f"{student.username} has no face registered.")
+
+    db.session.delete(student.face)
+    record_event(student, actor, AccountEventType.FACE_RESET, reason)
+    db.session.commit()
+    db.session.expire(student, ["face"])
+    current_app.logger.info("face reset for user %s by %s", student.id, actor.username)
+    return student

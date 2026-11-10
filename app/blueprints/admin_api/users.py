@@ -1,7 +1,9 @@
 """Admin API: faculty and student accounts."""
 from flask import jsonify
 
+from ...schemas.face_schemas import FaceResetSchema
 from ...schemas.user_schemas import (
+    AccountEventOutSchema,
     FacultyCreateSchema,
     StudentBulkCreateSchema,
     StudentCreateSchema,
@@ -9,7 +11,7 @@ from ...schemas.user_schemas import (
     UserOutSchema,
     UserUpdateSchema,
 )
-from ...services import user_service
+from ...services import face_service, user_service
 from ...utils.decorators import admin_token_required
 from . import bp
 from .helpers import admin, body, page_of, query
@@ -82,3 +84,18 @@ def activate_user(user_id):
 def issue_temporary_password(user_id):
     user, temp = user_service.issue_temporary_password(admin(), user_id)
     return jsonify(_with_password(user, temp))
+
+
+@bp.post("/users/<int:user_id>/face/reset")
+@admin_token_required
+def reset_face(user_id):
+    data = body(FaceResetSchema())
+    user = face_service.reset_face(admin(), user_id, data["reason"])
+    return jsonify(user=user_out.dump(user))
+
+
+@bp.get("/users/<int:user_id>/history")
+@admin_token_required
+def account_history(user_id):
+    user, events = user_service.account_history(admin(), user_id)
+    return jsonify(user=user_out.dump(user), events=AccountEventOutSchema().dump(events, many=True))

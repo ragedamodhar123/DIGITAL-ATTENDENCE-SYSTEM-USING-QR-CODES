@@ -31,12 +31,28 @@
             </div>
           </div>
           {% if s.is_active and course.is_active %}
-            <form method="post"
-                  action="{{ url_for('faculty.issue_temporary_password', course_id=course.id, username=s.username) }}"
-                  data-confirm="Give {{ s.full_name }} a new temporary password? Their current password stops working and they are signed out.">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-outline-primary">New password</button>
-            </form>
+            <details class="row-actions">
+              <summary class="btn btn-sm btn-outline-primary">Actions</summary>
+              <div class="row-actions-menu">
+                <form method="post"
+                      action="{{ url_for('faculty.issue_temporary_password', course_id=course.id, username=s.username) }}"
+                      data-confirm="Give {{ s.full_name }} a new temporary password? Their current password stops working and they are signed out.">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-outline-primary w-100">New password</button>
+                </form>
+                {% if s.face is not none %}
+                  <form method="post" class="mt-3"
+                        action="{{ url_for('faculty.reset_face', course_id=course.id, username=s.username) }}"
+                        data-confirm="Reset {{ s.full_name }}'s face registration? They must register their face again before marking attendance.">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="form-label small" for="reason-{{ s.id }}">Reason for face reset</label>
+                    <input id="reason-{{ s.id }}" name="reason" class="form-control form-control-sm mb-2"
+                           required minlength="3" maxlength="200" placeholder="e.g. face check keeps failing">
+                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">Reset face</button>
+                  </form>
+                {% endif %}
+              </div>
+            </details>
           {% endif %}
         </li>
       {% endfor %}

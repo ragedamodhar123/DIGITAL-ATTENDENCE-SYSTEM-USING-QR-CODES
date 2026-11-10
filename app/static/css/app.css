@@ -101,6 +101,16 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 .status-ok { color: var(--ok); }
 .status-bad { color: var(--bad); }
 
+/* Per-student actions on the roster: a small menu, so the row stays readable on phones */
+.row-actions { position: relative; flex-shrink: 0; }
+.row-actions > summary { list-style: none; }
+.row-actions > summary::-webkit-details-marker { display: none; }
+.row-actions-menu {
+  position: absolute; right: 0; z-index: 10; width: 15rem; margin-top: .25rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: .5rem;
+  padding: .75rem; box-shadow: 0 .5rem 1.5rem rgba(16, 23, 42, .15);
+}
+
 /* Temporary password: large, spaced, easy to read aloud or copy by hand */
 .temp-password {
   font-size: 2rem; font-weight: 700; letter-spacing: .08em; text-align: center;

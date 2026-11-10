@@ -20,7 +20,7 @@ def test_migrated_schema_matches_models():
 
 def test_database_is_at_latest_revision():
     version = db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "0001_initial"
+    assert version == "0002_account_events"
 
 
 def test_audit_trigger_exists_after_migration():
@@ -28,6 +28,16 @@ def test_audit_trigger_exists_after_migration():
         text(
             "SELECT 1 FROM pg_trigger WHERE tgname = 'trg_attendance_audit_append_only' "
             "AND tgrelid = 'attendance_audit'::regclass"
+        )
+    ).scalar()
+    assert found == 1
+
+
+def test_account_events_trigger_exists_after_migration():
+    found = db.session.execute(
+        text(
+            "SELECT 1 FROM pg_trigger WHERE tgname = 'trg_account_events_append_only' "
+            "AND tgrelid = 'account_events'::regclass"
         )
     ).scalar()
     assert found == 1
@@ -45,10 +55,10 @@ def test_downgrade_removes_everything_and_upgrade_restores_it():
     downgrade(revision="base")
     remaining = set(inspect(db.engine).get_table_names()) - {"alembic_version"}
     assert remaining == set()
-    function_left = db.session.execute(
-        text("SELECT 1 FROM pg_proc WHERE proname = 'attendance_audit_append_only'")
-    ).scalar()
-    assert function_left is None
+    functions_left = db.session.execute(
+        text("SELECT proname FROM pg_proc WHERE proname IN ('attendance_audit_append_only', 'account_events_append_only')")
+    ).all()
+    assert functions_left == []
     db.session.remove()
 
     upgrade()
