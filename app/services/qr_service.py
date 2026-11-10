@@ -47,8 +47,11 @@ class TokenProblem(ValidationFailed):
 
     code = "attendance_code_problem"
 
-    def __init__(self, reason):
+    def __init__(self, reason, session_id=None):
         self.reason = reason
+        # Known only once the signature proved which session the code belongs to
+        # (expired code, closed session); kept for the scan log, never shown to users.
+        self.session_id = session_id
         super().__init__(TOKEN_MESSAGES[reason], details={"code": [TOKEN_MESSAGES[reason]]})
 
     def to_dict(self):
@@ -115,10 +118,10 @@ def verify_token(token, now=None):
         raise TokenProblem("invalid_code")
 
     if session.status != SessionStatus.OPEN or session.expires_at <= now:
-        raise TokenProblem("session_closed")
+        raise TokenProblem("session_closed", session.id)
     current = window_at(now)
     if window > current or window < current - current_app.config["QR_GRACE_WINDOWS"]:
-        raise TokenProblem("expired_code")
+        raise TokenProblem("expired_code", session.id)
     return session
 
 

@@ -9,6 +9,16 @@
   </p>
 </section>
 
+<section class="panel{% if open_sessions %} panel-highlight{% endif %}">
+  {% if open_sessions %}
+    <h2 class="h5 mb-2">Attendance is open</h2>
+    <ul class="mb-3">
+      {% for s in open_sessions %}<li>{{ s.course.code }} {{ s.course.name }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  <a class="btn btn-primary btn-lg w-100" href="{{ url_for('student.scan') }}">Scan attendance code</a>
+</section>
+
 <section class="panel">
   <h2 class="h5 mb-3">Your courses</h2>
   {% if courses %}
@@ -26,7 +36,4 @@
   {% endif %}
 </section>
 
-<section class="panel panel-quiet">
-  <p class="mb-0">To mark attendance, scan the code your faculty shows in class.</p>
-</section>
 {% endblock %}

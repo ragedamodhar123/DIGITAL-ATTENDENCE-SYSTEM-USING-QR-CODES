@@ -75,6 +75,12 @@ class BaseConfig:
     FACE_ENROL_RATE_LIMIT = "10 per 10 minutes"  # full registration attempts
 
     # Attendance rules (used from Module 4 onward)
+    SCAN_RATE_LIMIT = "30 per 5 minutes"  # QR scans per student
+    # Optional: only accept scans from these networks, e.g. "203.0.113.0/24,198.51.100.7".
+    # Empty = any network. With Cloudflare Tunnel this is the phone's public IP address.
+    ATTENDANCE_ALLOWED_NETWORKS = [
+        net.strip() for net in os.environ.get("ATTENDANCE_ALLOWED_NETWORKS", "").split(",") if net.strip()
+    ]
     APP_TIMEZONE = "Asia/Kolkata"
     QR_ROTATION_SECONDS = 10
     QR_GRACE_WINDOWS = 1

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set titles = {
+  "expired_code": "Code expired",
+  "invalid_code": "Not an attendance code",
+  "session_closed": "Attendance has ended",
+  "not_enrolled": "Not your course",
+  "face_not_registered": "Face not registered",
+  "outside_network": "Not on college Wi-Fi",
+  "already_recorded": "Already recorded",
+} %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<section class="panel panel-narrow checkin">
+  {% if problem %}
+    <h1 class="h3 mb-2">{{ titles.get(problem.reason, "Cannot mark attendance") }}</h1>
+    <p>{{ problem.message }}</p>
+    {% if problem.reason in ("expired_code", "invalid_code") %}
+      <a class="btn btn-primary btn-lg w-100" href="{{ url_for('student.scan') }}">Scan again</a>
+    {% elif problem.reason == "face_not_registered" %}
+      <a class="btn btn-primary btn-lg w-100" href="{{ url_for('face.enroll') }}">Register your face</a>
+    {% else %}
+      <a class="btn btn-outline-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+    {% endif %}
+
+  {% elif result.status == "already_present" %}
+    <h1 class="h3 mb-2">Already marked present</h1>
+    <p>You are already marked present for {{ result.course.code }} {{ result.course.name }}. Nothing more to do.</p>
+    <a class="btn btn-outline-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+
+  {% else %}
+    <h1 class="h3 mb-1">Code accepted</h1>
+    <p class="text-muted">{{ result.course.code }} {{ result.course.name }}</p>
+    <div class="alert alert-info mb-0" id="checkin-ready" data-session-id="{{ result.session.id }}" data-seconds="{{ seconds_left }}">
+      Next: a quick face check. Finish it within {{ seconds_left }} seconds, or scan the code again.
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

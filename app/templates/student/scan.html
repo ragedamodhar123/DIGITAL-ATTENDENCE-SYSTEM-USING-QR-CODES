@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Scan attendance code{% endblock %}
+{% block content %}
+<section class="panel panel-narrow" id="qr-scan" data-scan-path="/a/">
+  <h1 class="h3 mb-1">Scan attendance code</h1>
+  <p class="text-muted">Point your back camera at the code on your faculty's screen.</p>
+
+  <noscript><div class="alert alert-danger">This page needs JavaScript. You can also scan the code with your phone's camera app.</div></noscript>
+
+  <div id="qr-reader" class="qr-reader" aria-label="Camera preview"></div>
+  <p class="scan-status text-center" aria-live="polite">Press "Start scanning".</p>
+  <div class="alert alert-danger scan-error d-none" role="alert"></div>
+
+  <button type="button" class="btn btn-primary btn-lg w-100" data-action="start">Start scanning</button>
+
+  <p class="small text-muted mt-3 mb-0">Scanner not working? Open your phone's camera app and point it at the code; tap the link it shows.</p>
+</section>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ url_for('static', filename='vendor/html5-qrcode/html5-qrcode.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/student-scan.js') }}" defer></script>
+{% endblock %}

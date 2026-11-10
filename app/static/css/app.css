@@ -179,6 +179,14 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 .live-panel:fullscreen .qr-timer { width: min(85vmin, 90vw); }
 .live-panel:fullscreen .count { font-size: 3rem; }
 
+/* Student home: attendance open right now */
+.panel-highlight { border-color: var(--ok); box-shadow: inset 4px 0 0 var(--ok); }
+
+/* In-app scanner */
+.qr-reader { width: 100%; max-width: 26rem; margin: 0 auto .75rem; border-radius: .75rem; overflow: hidden; background: #10172a; min-height: 12rem; }
+.qr-reader video { width: 100% !important; height: auto !important; display: block; }
+.scan-status { min-height: 1.5rem; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

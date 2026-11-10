@@ -72,6 +72,17 @@ def _validate_config(app):
 
     _check_database_separation(app, url)
 
+    import ipaddress
+
+    for network in app.config.get("ATTENDANCE_ALLOWED_NETWORKS") or []:
+        try:
+            ipaddress.ip_network(network, strict=False)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"ATTENDANCE_ALLOWED_NETWORKS has an invalid entry {network!r}. "
+                "Use addresses or ranges like 203.0.113.0/24, separated by commas."
+            ) from exc
+
 
 def _check_database_separation(app, url):
     """Keep test and real data apart, in both directions.
@@ -155,6 +166,7 @@ def _register_error_handlers(app):
 
 def _register_blueprints(app):
     from .blueprints.admin_api import bp as admin_api_bp
+    from .blueprints.attend import bp as attend_bp
     from .blueprints.auth import bp as auth_bp
     from .blueprints.face import api_bp as face_api_bp
     from .blueprints.face import bp as face_bp
@@ -163,7 +175,9 @@ def _register_blueprints(app):
     from .blueprints.main import bp as main_bp
     from .blueprints.student import bp as student_bp
 
-    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, faculty_api_bp, face_bp, face_api_bp, admin_api_bp):
+    for blueprint in (
+        auth_bp, main_bp, student_bp, attend_bp, faculty_bp, faculty_api_bp, face_bp, face_api_bp, admin_api_bp
+    ):
         app.register_blueprint(blueprint)
     # Token-only API: no cookies are used, so CSRF does not apply (see admin_api/__init__.py).
     csrf.exempt(admin_api_bp)

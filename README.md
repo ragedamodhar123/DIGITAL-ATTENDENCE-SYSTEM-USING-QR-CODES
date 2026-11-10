@@ -38,9 +38,10 @@ Done
   `flask close-expired-sessions`; college-time dates (tzdata)
 - Module 4, Part 2: rotating signed QR codes (new code every 10 s); faculty attendance
   screen with live counts, latest check-ins, full screen, Stop; start button on course page
+- Module 4, Part 3: student check-in at /a/<code> (works from the phone camera app), in-app
+  scanner page, "attendance is open" on the student home, scan log, optional network rule
 
 Next
-- Module 4, Part 3: student scan and check-in
 - Module 4, Part 4: face check and marking present
 - Modules 5 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
@@ -107,7 +108,14 @@ internet is slow or blocked in class). In Git Bash, from the project folder:
 ```bash
 curl -L -o app/static/vendor/bootstrap/bootstrap.min.css https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css
 curl -L -o app/static/vendor/bootstrap/bootstrap.bundle.min.js https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
+mkdir -p app/static/vendor/html5-qrcode
+curl -L -o app/static/vendor/html5-qrcode/html5-qrcode.min.js https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js
+sha256sum app/static/vendor/html5-qrcode/html5-qrcode.min.js
 ```
+
+The last command should print
+`660b12437b1d747e3e68b8be0685c08cb728140110ad213f167b14b66f8b1d8e` (the official 2.3.8 file).
+If it does not, delete the file and download it again.
 
 7. Install the new packages (whenever requirements.txt changes) and download the face models (about 39 MB, checked against
 OpenCV's official checksums):
@@ -134,7 +142,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 4, Part 2: 593 passed (9 of them need the face models;
+Expected after Module 4, Part 3: 627 passed (9 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -187,7 +195,8 @@ attendance-system/
 │   │   ├── admin_api/    /api/admin/... JSON API for Postman (users.py, academic.py)
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
-│   │   ├── student/      /student/ dashboard
+│   │   ├── student/      /student/ home (open attendance, scan button), /student/scan scanner
+│   │   ├── attend/       /a/<code>: the page the QR link opens (check-in)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
 │   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
@@ -199,7 +208,8 @@ attendance-system/
 │   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
 │   │   ├── js/face-enroll.js     camera, guided photos, live checks, registration
 │   │   ├── js/faculty-session.js live QR screen: polling, countdown, offline handling
-│   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
+│   │   ├── js/student-scan.js    in-app QR scanner; opens only this site's /a/<code> links
+│   │   └── vendor/       bootstrap/ and html5-qrcode/ (downloaded, setup step 6)
 │   ├── schemas/          input validation (shape of data) with marshmallow
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
 │   │   ├── user_schemas.py  create/update/list/output shapes for users
@@ -213,6 +223,7 @@ attendance-system/
 │   │   ├── face_service.py   photo decoding, quality checks, register, verify
 │   │   ├── session_service.py  start/stop attendance, auto-close, absentees, counts
 │   │   ├── qr_service.py     signed rotating codes, QR as SVG
+│   │   ├── checkin_service.py  scan checks, pending check-in, scan log, network rule
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -261,6 +272,8 @@ attendance-system/
     ├── test_session_service.py  start/stop rules, races, auto-close, absentees, counts
     ├── test_qr_service.py    code signing, rotation, grace period, forgery, expiry
     ├── test_faculty_sessions.py  start/stop pages, live endpoint, permissions
+    ├── test_checkin_service.py   scan checks, pending check-in, scan log, network rule
+    ├── test_checkin_routes.py    /a/<code> page, scanner page, student home
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -456,6 +469,39 @@ the latest check-ins, "Full screen" for projectors, and "Stop attendance".
   final summary. The screen is kept awake while attendance runs (where the browser allows).
 
 
+## Student check-in (scanning)
+
+Students scan the code either with their phone's normal camera app (the QR holds a link,
+so tapping it opens the check-in page) or with the in-app scanner ("Scan attendance code"
+on their home page, which uses the back camera). The in-app scanner only ever opens this
+site's `/a/<code>` page: a QR code pointing anywhere else, such as a fake code stuck over
+the real one, is refused.
+
+Checks, in order: the code is genuine and current and its attendance is still open; the
+phone is on an allowed network (optional, below); the student is actively enrolled in the
+course; their face is registered; they have no record in this session yet. If all pass, a
+pending check-in is created that lasts 60 seconds (`PENDING_CHECKIN_SECONDS`); the face
+check (Module 4, Part 4) must be finished within that time. Scanning again refreshes the
+60 seconds but keeps the number of face attempts already used.
+
+A logged-out student is sent to log in and then back to the link; by then the code has
+usually changed, so the page says "Code expired, scan again". Students already marked
+present get a friendly "Already marked present" page. Scans are limited to 30 per 5
+minutes per student.
+
+Every scan, accepted or not, is written to `scan_logs` with the outcome (`ok`,
+`expired_code`, `invalid_code`, `session_closed`, `not_enrolled`, `face_not_registered`,
+`outside_network`, `already_present`, `already_recorded`), the session when known, the IP
+address and the browser. A forged code is never tied to a session in the log.
+
+Optional network rule: set `ATTENDANCE_ALLOWED_NETWORKS` in `.env` to the college's public
+IP addresses or ranges (comma-separated, e.g. `203.0.113.0/24,198.51.100.7`) to accept scans
+only from the college network. This makes forwarding a code to someone at home harder.
+Leave it empty to allow any network. Invalid entries stop the app at startup with a message.
+Through Cloudflare Tunnel the address checked is the phone's public IP, so ask the college
+IT team for the Wi-Fi's public address range. Students on mobile data will be refused.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -579,6 +625,10 @@ sent to the browser; it goes to the server log.
   http://127.0.0.1 or localhost. Open it through the trycloudflare.com address instead.
 - QR code blurred with "Code out of date": the laptop lost its connection to the server
   (or the tunnel stopped). Check the Wi-Fi and that both terminals are running.
+- Scanner page says "The scanner is not available": `html5-qrcode.min.js` is missing from
+  `app/static/vendor/html5-qrcode/` (setup step 6). Students can still use the camera app.
+- Every scan says "Connect to the college Wi-Fi": `ATTENDANCE_ALLOWED_NETWORKS` does not
+  include the network's public IP. Check the scan log for the IPs seen, or leave it empty.
 - `ZoneInfoNotFoundError: 'No time zone found with key Asia/Kolkata'`: the `tzdata` package
   is missing (Windows has no built-in timezone data). Run `pip install -r requirements.txt`.
 - `download-face-models` fails: check the internet connection and run it again; a
