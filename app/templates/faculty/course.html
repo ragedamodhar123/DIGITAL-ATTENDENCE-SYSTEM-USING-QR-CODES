@@ -8,6 +8,20 @@
   <p class="text-muted mb-0">{{ course.term }}, {{ entries | length }} student{{ '' if entries | length == 1 else 's' }}</p>
 </section>
 
+{% if course.is_active and entries %}
+<section class="panel">
+  {% if open_session %}
+    <p class="mb-2"><strong>Attendance is running</strong> for this course.</p>
+    <a class="btn btn-primary btn-lg w-100" href="{{ url_for('faculty.session', session_id=open_session.id) }}">Open attendance screen</a>
+  {% else %}
+    <form method="post" action="{{ url_for('faculty.start_attendance', course_id=course.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary btn-lg w-100">Start attendance</button>
+    </form>
+  {% endif %}
+</section>
+{% endif %}
+
 <section class="panel">
   <h2 class="h5 mb-3">Students</h2>
   {% if entries %}

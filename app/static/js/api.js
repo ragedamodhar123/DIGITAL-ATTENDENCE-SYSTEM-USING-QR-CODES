@@ -1,6 +1,6 @@
 // Small helper for calling the app's JSON endpoints from pages.
 // - sends the CSRF token (from <meta name="csrf-token">) with every POST
-// - never throws: always resolves to { ok, status, data }
+// - never throws: always resolves to { ok, status, data } (postJSON and getJSON)
 // - turns network problems and timeouts into a readable message
 (function () {
   "use strict";
@@ -47,5 +47,27 @@
       .finally(function () { if (timer) clearTimeout(timer); });
   }
 
-  window.AttendanceApi = { postJSON: postJSON };
+  function getJSON(url, options) {
+    var timeoutMs = (options && options.timeoutMs) || DEFAULT_TIMEOUT_MS;
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+
+    return fetch(url, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { "Accept": "application/json" },
+      cache: "no-store",
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        return response.json().then(
+          function (data) { return { ok: response.ok, status: response.status, data: data || {} }; },
+          function () { return { ok: false, status: response.status, data: {} }; }
+        );
+      })
+      .catch(function () { return { ok: false, status: 0, data: {} }; })
+      .finally(function () { if (timer) clearTimeout(timer); });
+  }
+
+  window.AttendanceApi = { postJSON: postJSON, getJSON: getJSON };
 })();

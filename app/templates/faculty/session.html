@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Attendance {{ course.code }}{% endblock %}
+{% block content %}
+<p class="mb-2"><a href="{{ url_for('faculty.course', course_id=course.id) }}">{{ course.code }}</a></p>
+
+{% if attendance.status == "open" %}
+  {% if local_address %}
+    <div class="alert alert-warning">
+      You opened this page on a local address, so the QR code points to <strong>{{ request.host }}</strong>,
+      which phones cannot open. Open this page through the Cloudflare Tunnel address instead (see the README).
+    </div>
+  {% endif %}
+
+  <section class="panel live-panel" id="live-session"
+           data-live-url="{{ url_for('faculty_api.live', session_id=attendance.id) }}"
+           data-grace-windows="{{ config.QR_GRACE_WINDOWS }}">
+    <div class="live-head">
+      <div>
+        <h1 class="h4 mb-0">{{ course.code }} {{ course.name }}</h1>
+        <p class="text-muted mb-0 small">Scan with your phone to mark attendance. Closes automatically at <span data-field="ends_at">{{ attendance.expires_at | localtime }}</span>.</p>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-action="fullscreen">Full screen</button>
+    </div>
+
+    <div class="alert alert-warning connection-banner d-none" role="status">Connection lost. Reconnecting...</div>
+    <noscript><div class="alert alert-danger">This page needs JavaScript to show the QR code.</div></noscript>
+
+    <div class="qr-box" data-state="loading">
+      <div class="qr-code" aria-live="off"></div>
+      <div class="qr-overlay">Loading code...</div>
+    </div>
+    <div class="qr-timer" aria-hidden="true"><div class="qr-timer-bar"></div></div>
+
+    <div class="live-counts" aria-live="polite">
+      <div><span class="count" data-field="present">{{ counts.present }}</span><span class="count-label">present</span></div>
+      <div><span class="count" data-field="not_yet">{{ counts.not_yet }}</span><span class="count-label">not yet</span></div>
+      <div><span class="count" data-field="expected">{{ counts.expected }}</span><span class="count-label">enrolled</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="h6 mb-2">Latest check-ins</h2>
+    <ol class="recent-list" data-field="recent"><li class="text-muted">Nobody yet.</li></ol>
+  </section>
+
+  <form method="post" action="{{ url_for('faculty.stop_attendance', session_id=attendance.id) }}"
+        data-confirm="Stop attendance? Students who have not checked in will be marked absent.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-outline-danger btn-lg w-100">Stop attendance</button>
+  </form>
+{% else %}
+  <section class="panel">
+    <h1 class="h4 mb-1">{{ course.code }} {{ course.name }}</h1>
+    <p class="text-muted">{{ attendance.session_date.strftime("%d %b %Y") }}, attendance closed at {{ attendance.ended_at | localtime }}.</p>
+    <div class="live-counts">
+      <div><span class="count">{{ counts.present }}</span><span class="count-label">present</span></div>
+      <div><span class="count">{{ counts.absent }}</span><span class="count-label">absent</span></div>
+      <div><span class="count">{{ counts.expected }}</span><span class="count-label">total</span></div>
+    </div>
+  </section>
+  <a class="btn btn-primary w-100" href="{{ url_for('faculty.course', course_id=course.id) }}">Back to {{ course.code }}</a>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if attendance.status == "open" %}
+  <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/faculty-session.js') }}" defer></script>
+{% endif %}
+{% endblock %}

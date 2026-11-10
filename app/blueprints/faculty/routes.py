@@ -4,7 +4,7 @@ from flask_login import current_user
 
 from ...extensions import limiter
 from ...models import Role
-from ...services import academic_service, face_service, user_service
+from ...services import academic_service, face_service, session_service, user_service
 from ...services.errors import ValidationFailed
 from ...services.course_service import courses_for_faculty
 from ...utils.decorators import role_required
@@ -24,7 +24,8 @@ def dashboard():
 def course(course_id):
     # PermissionDenied / NotFound from the service become 403 / 404 pages.
     course, entries = academic_service.course_roster(current_user, course_id)
-    return render_template("faculty/course.html", course=course, entries=entries)
+    open_session = session_service.open_session_for_course(course.id)
+    return render_template("faculty/course.html", course=course, entries=entries, open_session=open_session)
 
 
 def _student_in_course(course_id, username):

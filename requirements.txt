@@ -32,4 +32,7 @@ Pillow>=10.0
 # needs this package there.
 tzdata>=2024.1
 
-# Added in later modules: qrcode, pandas, openpyxl
+# QR codes for attendance (drawn as SVG on the server)
+qrcode>=7.4,<9
+
+# Added in later modules: pandas, openpyxl

@@ -39,6 +39,7 @@ def create_app(config_name=None):
     _register_error_handlers(app)
     _register_security_headers(app)
     _register_blueprints(app)
+    _register_template_filters(app)
     _register_core_routes(app)
     _register_cli(app)
     return app
@@ -157,11 +158,12 @@ def _register_blueprints(app):
     from .blueprints.auth import bp as auth_bp
     from .blueprints.face import api_bp as face_api_bp
     from .blueprints.face import bp as face_bp
+    from .blueprints.faculty import api_bp as faculty_api_bp
     from .blueprints.faculty import bp as faculty_bp
     from .blueprints.main import bp as main_bp
     from .blueprints.student import bp as student_bp
 
-    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, face_bp, face_api_bp, admin_api_bp):
+    for blueprint in (auth_bp, main_bp, student_bp, faculty_bp, faculty_api_bp, face_bp, face_api_bp, admin_api_bp):
         app.register_blueprint(blueprint)
     # Token-only API: no cookies are used, so CSRF does not apply (see admin_api/__init__.py).
     csrf.exempt(admin_api_bp)
@@ -186,6 +188,14 @@ def _register_security_headers(app):
             response.headers["Pragma"] = "no-cache"  # older browsers and proxies
             response.headers["Expires"] = "0"
         return response
+
+
+def _register_template_filters(app):
+    from .utils.timeutils import to_local
+
+    @app.template_filter("localtime")
+    def localtime(moment, fmt="%H:%M"):
+        return to_local(moment).strftime(fmt) if moment else ""
 
 
 def _register_cli(app):

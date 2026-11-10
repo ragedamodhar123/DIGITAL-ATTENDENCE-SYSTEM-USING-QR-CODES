@@ -36,9 +36,10 @@ Done
   account history table (face resets, issued passwords, deactivation) with migration 0002
 - Module 4, Part 1: session service (start, stop, auto-close, absentees filled in on close);
   `flask close-expired-sessions`; college-time dates (tzdata)
+- Module 4, Part 2: rotating signed QR codes (new code every 10 s); faculty attendance
+  screen with live counts, latest check-ins, full screen, Stop; start button on course page
 
 Next
-- Module 4, Part 2: rotating QR code and the faculty attendance screen
 - Module 4, Part 3: student scan and check-in
 - Module 4, Part 4: face check and marking present
 - Modules 5 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
@@ -133,7 +134,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 4, Part 1: 563 passed (9 of them need the face models;
+Expected after Module 4, Part 2: 593 passed (9 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -187,7 +188,8 @@ attendance-system/
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ dashboard
-│   │   ├── faculty/      /faculty/ dashboard, /faculty/courses/<id> roster, student passwords, face reset
+│   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
+│   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
@@ -196,6 +198,7 @@ attendance-system/
 │   │   ├── js/confirm-forms.js   asks before submitting forms marked data-confirm
 │   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
 │   │   ├── js/face-enroll.js     camera, guided photos, live checks, registration
+│   │   ├── js/faculty-session.js live QR screen: polling, countdown, offline handling
 │   │   └── vendor/bootstrap/  bootstrap.min.css, bootstrap.bundle.min.js (downloaded, step 6)
 │   ├── schemas/          input validation (shape of data) with marshmallow
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
@@ -209,6 +212,7 @@ attendance-system/
 │   │   ├── face_engine.py    OpenCV models (YuNet detector, SFace recogniser); thread-safe
 │   │   ├── face_service.py   photo decoding, quality checks, register, verify
 │   │   ├── session_service.py  start/stop attendance, auto-close, absentees, counts
+│   │   ├── qr_service.py     signed rotating codes, QR as SVG
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -255,6 +259,8 @@ attendance-system/
     ├── test_face_routes.py   face page and /api/face endpoints (stand-in engine)
     ├── test_face_reset.py    face reset (service, admin API, faculty page), account history
     ├── test_session_service.py  start/stop rules, races, auto-close, absentees, counts
+    ├── test_qr_service.py    code signing, rotation, grace period, forgery, expiry
+    ├── test_faculty_sessions.py  start/stop pages, live endpoint, permissions
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -420,6 +426,36 @@ deleted, even from pgAdmin. The admin reads it with `GET /api/admin/users/<id>/h
   present even if dropped later. Stopping twice is harmless.
 
 
+## Rotating QR codes
+
+A code looks like `<session>.<window>.<signature>`. The window changes every 10 seconds
+(`QR_ROTATION_SECONDS`), so the code on screen changes every 10 seconds. The signature is
+an HMAC-SHA256 keyed by the session's own random secret mixed with `SECRET_KEY`: codes
+cannot be forged, a code for one session never works for another, and a copy of the
+database alone is not enough to make codes. A code is accepted in its own window and one
+window after (`QR_GRACE_WINDOWS = 1`), so it lives 10 to 20 seconds and a scan just as the
+code changes still counts. Nothing is stored per code; the server recomputes the signature.
+
+The QR holds a full link, `https://<site>/a/<code>`, built from the address the faculty
+opened the screen with. That is why the faculty must open the attendance screen through
+the Cloudflare Tunnel address: on `localhost` the page shows a warning, because phones
+cannot open that link.
+
+## Faculty attendance screen
+
+Course page, "Start attendance" opens the live screen: a large QR code (SVG, sharp on a
+projector), a bar counting down to the next code, counts (present / not yet / enrolled),
+the latest check-ins, "Full screen" for projectors, and "Stop attendance".
+
+- The screen asks the server every 2 s and right after each code change, using the
+  server's timing (not the laptop clock).
+- If the connection drops, a banner appears and retries slow down (up to every 5 s). If no
+  fresh code arrives before the shown one expires, the code is blurred out, so students
+  never scan a code that would be rejected.
+- If a co-teacher stops attendance or it closes automatically, the screen switches to the
+  final summary. The screen is kept awake while attendance runs (where the browser allows).
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -539,6 +575,10 @@ sent to the browser; it goes to the server log.
   cloudflared) and that cloudflared printed the address without errors.
 - Every student hits "Too many login attempts" together: `TRUSTED_PROXY_COUNT` is 0 while
   using the tunnel; set it to 1 and restart Flask.
+- Attendance screen warns that phones cannot open the address: you opened it on
+  http://127.0.0.1 or localhost. Open it through the trycloudflare.com address instead.
+- QR code blurred with "Code out of date": the laptop lost its connection to the server
+  (or the tunnel stopped). Check the Wi-Fi and that both terminals are running.
 - `ZoneInfoNotFoundError: 'No time zone found with key Asia/Kolkata'`: the `tzdata` package
   is missing (Windows has no built-in timezone data). Run `pip install -r requirements.txt`.
 - `download-face-models` fails: check the internet connection and run it again; a

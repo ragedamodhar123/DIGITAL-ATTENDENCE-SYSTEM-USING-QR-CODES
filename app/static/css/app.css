@@ -149,6 +149,36 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 .capture-step.done { background: var(--ok); border-color: var(--ok); }
 .capture-prompt { text-align: center; min-height: 3rem; }
 
+/* Live attendance screen */
+.live-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.qr-box {
+  position: relative; width: min(100%, 70vmin, 32rem); aspect-ratio: 1; margin: 0 auto;
+  background: #fff; border-radius: .5rem;
+}
+.qr-code svg { display: block; width: 100%; height: 100%; }
+.qr-overlay {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  text-align: center; padding: 1rem; font-weight: 700; color: var(--ink);
+  background: rgba(255, 255, 255, .85); border-radius: .5rem;
+}
+.qr-box[data-state="loading"] .qr-overlay,
+.qr-box[data-state="stale"] .qr-overlay,
+.qr-box[data-state="closed"] .qr-overlay { display: flex; }
+.qr-box[data-state="stale"] .qr-code { filter: blur(8px); }   /* an expired code must not be scannable */
+.qr-timer { width: min(100%, 70vmin, 32rem); height: .375rem; margin: .75rem auto 1rem; background: var(--line); border-radius: 1rem; overflow: hidden; }
+.qr-timer-bar { height: 100%; width: 100%; background: var(--ink); }
+.live-counts { display: flex; justify-content: center; gap: 2rem; text-align: center; }
+.count { display: block; font-size: 2rem; font-weight: 700; color: var(--ink); line-height: 1.1; }
+.count-label { font-size: .875rem; color: var(--muted); }
+.recent-list { margin: 0; padding-left: 1.25rem; }
+.recent-list li { padding: .125rem 0; }
+
+/* Full screen on a projector: the code as large as possible */
+.live-panel:fullscreen { background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 2rem; }
+.live-panel:fullscreen .qr-box,
+.live-panel:fullscreen .qr-timer { width: min(85vmin, 90vw); }
+.live-panel:fullscreen .count { font-size: 3rem; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
