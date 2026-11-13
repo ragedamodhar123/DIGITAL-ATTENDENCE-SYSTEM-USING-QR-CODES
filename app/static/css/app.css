@@ -187,6 +187,16 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 .qr-reader video { width: 100% !important; height: auto !important; display: block; }
 .scan-status { min-height: 1.5rem; }
 
+/* Liveness: big arrow over the camera showing which way to turn */
+.turn-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 4rem; font-weight: 700; line-height: 1; color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .6); pointer-events: none;
+}
+.turn-arrow[data-dir="L"] { left: .75rem; }
+.turn-arrow[data-dir="R"] { right: .75rem; }
+.turn-arrow[data-dir=""] { display: none; }
+
 /* Attendance face check: a smaller camera so the buttons stay on screen */
 .camera-small { max-height: 45vh; }
 .checkin-timer { margin-top: -.5rem; }

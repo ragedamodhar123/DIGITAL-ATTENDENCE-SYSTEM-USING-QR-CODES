@@ -104,3 +104,61 @@ def test_face_far_away_is_too_small(engine, sample):
     with pytest.raises(fs.FaceProblem) as exc:
         fs.analyse(canvas, engine)
     assert exc.value.reason in {"face_too_small", "no_face"}
+
+
+# ---- liveness with the real detector (Module 4, liveness) ----------------------
+
+def _tilt_flat_picture(image, degrees):
+    """Simulate a printed photo or phone screen turned about its vertical axis:
+    one side gets narrower and shorter (perspective), like holding it at an angle."""
+    import math
+
+    height, width = image.shape[:2]
+    shrink = math.sin(math.radians(abs(degrees))) * 0.35
+    squeeze = width * (1 - math.cos(math.radians(abs(degrees)))) / 2
+    near_side = [[squeeze, 0], [squeeze, height]]
+    far_side = [[width - squeeze, height * shrink / 2], [width - squeeze, height * (1 - shrink / 2)]]
+    if degrees < 0:
+        near_side, far_side = [[squeeze, height * shrink / 2], [squeeze, height * (1 - shrink / 2)]], [[width - squeeze, 0], [width - squeeze, height]]
+    src = np.float32([[0, 0], [0, height], [width, 0], [width, height]])
+    dst = np.float32([near_side[0], near_side[1], far_side[0], far_side[1]])
+    matrix = cv2.getPerspectiveTransform(src, dst)
+    return cv2.warpPerspective(image, matrix, (width, height), borderMode=cv2.BORDER_REPLICATE)
+
+
+def test_looking_straight_measures_near_zero(engine, sample):
+    from app.services.face_engine import nose_offset
+
+    offset = nose_offset(engine.detect(sample)[0])
+    print(f"\nstraight sample: nose offset {offset:+.3f} (straight limit 0.15)")
+    assert abs(offset) < 0.15
+
+
+@pytest.mark.parametrize("degrees", [-40, -25, 25, 40])
+def test_tilted_flat_photo_never_looks_like_a_head_turn(engine, sample, degrees):
+    from app.services.face_engine import nose_offset
+
+    straight = nose_offset(engine.detect(sample)[0])
+    tilted = _tilt_flat_picture(sample, degrees)
+    faces = [d for d in engine.detect(tilted) if d.score >= 0.85]
+    if not faces:
+        pytest.skip("detector did not find the face in this strongly tilted picture (also a pass for liveness)")
+    moved = nose_offset(faces[0]) - straight
+    print(f"\nflat photo tilted {degrees:+d} deg: moved {moved:+.3f} from straight (a turn needs 0.12)")
+    assert abs(moved) < 0.12
+
+
+def test_photo_attack_fails_full_liveness_check(engine, sample):
+    from app.services import face_service
+
+    student = make_user(role=Role.STUDENT, must_change_password=False)
+    captures = [encode(sample), encode(cv2.convertScaleAbs(sample, alpha=1.0, beta=15)), encode(_shift(sample, 8, -6))]
+    face_service.enrol(student, student, captures, engine)
+
+    straight = [encode(sample), encode(cv2.convertScaleAbs(sample, alpha=0.95, beta=0))]
+    left = [encode(_tilt_flat_picture(sample, d)) for d in (20, 30, 35, 40)]
+    right = [encode(_tilt_flat_picture(sample, -d)) for d in (20, 30, 35, 40)]
+    result = face_service.check_liveness(student, [straight, left, right], "LR", engine)
+    print(f"\nphoto attack: identity matched={result.identity_matched} live={result.live} ({result.summary})")
+    assert result.identity_matched is True   # it IS the right face...
+    assert result.live is False              # ...but a flat picture cannot turn

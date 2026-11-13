@@ -7,15 +7,18 @@ Guarantees
   rule on (session, student), plus row locks so two taps cannot both succeed.
 - Only the logged-in student's OWN registered face can match. A friend using
   their own phone and login with your face simply fails the check.
-- At most FACE_CHECK_ATTEMPTS (3) mismatches per check-in. Rescanning the code does
+- Liveness: the student follows a random head-turn order (look straight, turn one
+  way, then the other). A photo or phone screen held up to the camera cannot turn
+  in 3D, so it fails; so does swapping faces between the steps.
+- At most FACE_CHECK_ATTEMPTS (3) failed checks (mismatch or liveness) per check-in. Rescanning the code does
   not reset the count. After that the student asks the faculty (manual marking).
 - A photo that cannot be checked (too dark, no face, ...) does not use up an
   attempt: nothing was compared.
 - If attendance stops or the 60 seconds run out during the check, nothing is marked.
 
-Lock order (avoids deadlocks with stop_session, which locks the session row and
-then deletes pending check-ins): session row first (shared lock), then the
-pending check-in row.
+Lock order, the same everywhere (session_service, manual_service, here): session
+row (shared lock), then the pending check-in row, then the attendance record.
+One order is what prevents deadlocks with Stop and with manual changes.
 """
 from dataclasses import dataclass
 
@@ -51,14 +54,15 @@ class FaceCheckRefused(ServiceError):
         "too_many_attempts": "Your face did not match after several tries. Ask your faculty to mark your attendance.",
         "already_recorded": "Your attendance for this class has already been recorded by your faculty.",
         "face_mismatch": "Your face did not match your registration. Face the camera in good light and try again.",
+        "liveness_failed": face_service.LIVENESS_MESSAGES["no_turn"],
     }
-    STATUS = {"too_many_attempts": 403, "face_mismatch": 422, "session_closed": 410}
+    STATUS = {"too_many_attempts": 403, "face_mismatch": 422, "liveness_failed": 422, "session_closed": 410}
 
-    def __init__(self, reason, attempts_left=None):
+    def __init__(self, reason, attempts_left=None, message=None):
         self.reason = reason
         self.attempts_left = attempts_left
         self.status_code = self.STATUS.get(reason, 409)
-        super().__init__(self.MESSAGES[reason])
+        super().__init__(message or self.MESSAGES[reason])
 
     def to_dict(self):
         body = super().to_dict()
@@ -78,9 +82,12 @@ def _log(student, session_id, outcome, detail=None, ip=None, user_agent=None):
     log_scan(student, outcome, session_id, detail=detail, ip=ip, user_agent=user_agent, event="face")
 
 
-def complete_checkin(student, session_id, image_data, ip=None, user_agent=None, now=None, engine=None):
-    """Check the student's face and mark them present. Returns MarkResult or raises
-    FaceCheckRefused / face_service.FaceProblem / FaceServiceUnavailable."""
+def complete_checkin(student, session_id, steps, ip=None, user_agent=None, now=None, engine=None):
+    """Check the student's face and liveness, then mark them present.
+
+    steps: [straight frames, first-turn frames, second-turn frames] as raw image bytes.
+    Returns MarkResult or raises FaceCheckRefused / face_service.FaceProblem /
+    FaceServiceUnavailable."""
     now = now or utcnow()
     max_attempts = current_app.config["FACE_CHECK_ATTEMPTS"]
     known_session = session_id if valid_id(session_id) else None
@@ -121,15 +128,18 @@ def complete_checkin(student, session_id, image_data, ip=None, user_agent=None, 
         if record is not None and record.status == AttendanceStatus.PRESENT:
             db.session.commit()
             return MarkResult("already_present", record)
+        if record is not None:
+            refuse("already_recorded")  # the faculty decided at that same moment
         refuse("no_checkin")
     if pending.expires_at <= now:
         refuse("checkin_expired")
     if pending.face_attempts >= max_attempts:
         refuse("too_many_attempts", attempts_left=0)
 
-    # 4. The face check itself. Photo problems (too dark, no face...) do not use an attempt.
+    # 4. The face and liveness check. Photo problems (too dark, no face, not looking
+    #    straight...) do not use an attempt: nothing was compared.
     try:
-        result = face_service.verify(student, image_data, engine)
+        result = face_service.check_liveness(student, steps, pending.challenge, engine)
     except face_service.FaceProblem as problem:
         db.session.rollback()
         _log(student, session.id, f"photo_{problem.reason}"[:32], None, ip, user_agent)
@@ -139,15 +149,19 @@ def complete_checkin(student, session_id, image_data, ip=None, user_agent=None, 
         _log(student, session.id, "face_not_registered", None, ip, user_agent)
         raise
 
-    detail = f"similarity={result.similarity:.3f}"
-    if not result.matched:
+    detail = f"{pending.challenge} {result.summary}"[:255]
+    if not (result.identity_matched and result.live):
+        # Wrong face, or a face that did not really turn: both use up an attempt,
+        # otherwise the photo trick could simply be retried forever.
+        reason = "face_mismatch" if not result.identity_matched else "liveness_failed"
         pending.face_attempts += 1
         attempts_left = max_attempts - pending.face_attempts
         db.session.commit()
-        _log(student, session.id, "face_mismatch", detail, ip, user_agent)
+        _log(student, session.id, reason if reason == "face_mismatch" else f"liveness_{result.problem}", detail, ip, user_agent)
         if attempts_left <= 0:
             raise FaceCheckRefused("too_many_attempts", attempts_left=0)
-        raise FaceCheckRefused("face_mismatch", attempts_left=attempts_left)
+        message = face_service.LIVENESS_MESSAGES.get(result.problem) if reason == "liveness_failed" else None
+        raise FaceCheckRefused(reason, attempts_left=attempts_left, message=message)
 
     # 5. Match: mark present. ON CONFLICT is a final safety net behind the locks.
     inserted = db.session.execute(

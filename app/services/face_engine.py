@@ -58,6 +58,30 @@ class Detection:
         return self.width * self.height
 
 
+MIN_EYE_DISTANCE_PX = 12  # below this the landmarks are too close together to measure a turn
+
+
+def nose_offset(detection):
+    """How far the nose tip sits from the middle of the eyes, in eye-widths.
+
+    Near 0 when looking straight at the camera (real faces measured up to about
+    0.07, because nobody faces a phone perfectly). When a real head turns, the nose
+    (which sticks out) shifts towards one eye: about 0.12 more at a slight 20 degree
+    turn, 0.19 at 30 degrees. A flat photo or phone screen, however it is tilted, keeps the
+    nose almost exactly between the eyes (under 0.03 even at 40 degrees), because a
+    flat picture has no depth. Positive = nose towards the right of the image.
+    Returns None if the landmarks are unusable.
+    """
+    raw = detection.raw
+    if raw is None or len(raw) < 10:
+        return None
+    eye_xs = sorted((float(raw[4]), float(raw[6])))
+    distance = eye_xs[1] - eye_xs[0]
+    if distance < MIN_EYE_DISTANCE_PX:
+        return None
+    return (float(raw[8]) - (eye_xs[0] + eye_xs[1]) / 2) / distance
+
+
 def file_sha256(path):
     digest = hashlib.sha256()
     with open(path, "rb") as handle:

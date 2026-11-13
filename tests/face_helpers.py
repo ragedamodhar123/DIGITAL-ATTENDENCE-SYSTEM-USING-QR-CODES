@@ -26,8 +26,18 @@ def encode(image, fmt="JPEG", **save_kwargs):
     return buffer.getvalue()
 
 
-def face(x=200, y=120, size=200, score=0.95):
-    return Detection(x=x, y=y, width=size, height=size, score=score, raw=np.zeros(15, dtype=np.float32))
+def face(x=200, y=120, size=200, score=0.95, offset=0.0):
+    """A detected face with YuNet-style landmarks. `offset` = nose position between the
+    eyes in eye-widths: 0 looking straight, about +/-0.12 or more for a real head turn."""
+    eye_left, eye_right = x + 0.3 * size, x + 0.7 * size
+    eye_y, eye_width = y + 0.4 * size, 0.4 * size
+    nose_x = (eye_left + eye_right) / 2 + offset * eye_width
+    raw = np.array(
+        [x, y, size, size, eye_left, eye_y, eye_right, eye_y, nose_x, y + 0.6 * size,
+         x + 0.35 * size, y + 0.8 * size, x + 0.65 * size, y + 0.8 * size, score],
+        dtype=np.float32,
+    )
+    return Detection(x=x, y=y, width=size, height=size, score=score, raw=raw)
 
 
 def unit(seed):
@@ -43,14 +53,23 @@ def near(vector, noise=0.05, seed=1):
 
 
 class FakeEngine:
-    """Stands in for OpenCVFaceEngine. Returns the faces and embeddings it is given."""
+    """Stands in for OpenCVFaceEngine. Returns the faces and embeddings it is given.
 
-    def __init__(self, detections=None, embeddings=None):
+    offsets: optional list of nose offsets, one per detect() call in order, to
+    simulate a head turning (or not) across the frames of a liveness check.
+    """
+
+    def __init__(self, detections=None, embeddings=None, offsets=None):
         self.detections = [face()] if detections is None else detections
         self.embeddings = list(embeddings) if embeddings else []
+        self.offsets = list(offsets) if offsets else []
         self.default = unit(42)
 
     def detect(self, image):
+        if self.offsets and self.detections:
+            main = self.detections[0]
+            turned = face(x=main.x, y=main.y, size=main.width, score=main.score, offset=self.offsets.pop(0))
+            return [turned] + list(self.detections[1:])
         return list(self.detections)
 
     def embed(self, image, detection):

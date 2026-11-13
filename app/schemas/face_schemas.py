@@ -26,3 +26,16 @@ class FaceEnrolSchema(StrictSchema):
 
 class FaceResetSchema(StrictSchema):
     reason = fields.String(required=True, validate=validate.Length(min=3, max=200))
+
+
+MAX_FRAMES_PER_STEP = 5
+
+
+class FaceLivenessSchema(StrictSchema):
+    """Head-turn check: [straight frames, first-turn frames, second-turn frames]."""
+
+    steps = fields.List(
+        fields.List(_data_url(), validate=validate.Length(min=1, max=MAX_FRAMES_PER_STEP)),
+        required=True,
+        validate=validate.Length(equal=3),
+    )

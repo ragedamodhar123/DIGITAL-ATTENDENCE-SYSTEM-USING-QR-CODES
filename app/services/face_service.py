@@ -28,7 +28,7 @@ from ..extensions import db
 from ..models import AccountEventType, FaceEmbedding, User, record_event
 from .common import valid_id
 from .errors import Conflict, NotFound, PermissionDenied, ServiceError, ValidationFailed
-from .face_engine import EMBEDDING_DIM, MODEL_NAME, OpenCVFaceEngine
+from .face_engine import EMBEDDING_DIM, MODEL_NAME, OpenCVFaceEngine, nose_offset
 
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 ALLOWED_DATA_URL_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -51,6 +51,7 @@ PROBLEM_MESSAGES = {
     "too_blurry": "The photo is blurry. Hold the phone still and try again.",
     "too_dark": "The photo is too dark. Move to a brighter place or face the light.",
     "too_bright": "The photo is too bright. Move away from direct light.",
+    "not_straight": "Look straight at the camera at the start of the check.",
 }
 
 
@@ -148,6 +149,7 @@ class FaceSample:
     detection_score: float
     sharpness: float
     brightness: float
+    detection: object = None
 
 
 def _main_face(detections, min_score):
@@ -172,8 +174,12 @@ def _face_crop(image, face):
     return cv2.resize(gray, (QUALITY_FACE_SIZE, QUALITY_FACE_SIZE), interpolation=cv2.INTER_AREA)
 
 
-def analyse(image, engine=None):
-    """One decoded photo -> FaceSample, or FaceProblem explaining what to fix."""
+def analyse(image, engine=None, max_offset=None):
+    """One decoded photo -> FaceSample, or FaceProblem explaining what to fix.
+
+    max_offset: if given, the face must be looking straight (nose offset within it);
+    checked before the (slow) embedding step, so off-angle frames cost little.
+    """
     config = current_app.config
     engine = engine or get_engine()
     face = _main_face(engine.detect(image), config["FACE_MIN_DETECTION_SCORE"])
@@ -196,8 +202,15 @@ def analyse(image, engine=None):
     if sharpness < config["FACE_MIN_SHARPNESS"]:
         raise FaceProblem("too_blurry")
 
+    if max_offset is not None:
+        offset = nose_offset(face)
+        if offset is None or abs(offset) > max_offset:
+            raise FaceProblem("not_straight")
+
     embedding = engine.embed(image, face)
-    return FaceSample(embedding=embedding, detection_score=face.score, sharpness=sharpness, brightness=brightness)
+    return FaceSample(
+        embedding=embedding, detection_score=face.score, sharpness=sharpness, brightness=brightness, detection=face
+    )
 
 
 def similarity(a, b):
@@ -348,3 +361,99 @@ def reset_face(actor, student_id, reason):
     db.session.expire(student, ["face"])
     current_app.logger.info("face reset for user %s by %s", student.id, actor.username)
     return student
+
+
+# ---- liveness (head-turn challenge) -------------------------------------------
+
+LIVENESS_MESSAGES = {
+    "no_turn": "We could not see your head turn as asked. Follow the arrows and turn your head a little more.",
+    "different_person": "The face changed during the check. Only you should be in front of the camera.",
+}
+STEP_DIRECTION = {"L": +1, "R": -1}  # the student's left/right, as seen by the unmirrored front camera
+
+
+@dataclass
+class LivenessResult:
+    identity_matched: bool
+    similarity: float
+    distance: float
+    live: bool
+    problem: str = None          # "no_turn" or "different_person" when not live
+    summary: str = ""            # numbers for the scan log
+
+
+def _turn_frame(images, direction, engine, config, straight_offset=0.0):
+    """Best frame for one turn step: (movement along the asked direction, frame) or (None, None).
+
+    Movement is measured FROM the student's own straight pose, so a slightly
+    turned natural pose or camera angle does not make one side harder than the other.
+    """
+    best = (None, None)
+    for data in images:
+        try:
+            image = decode_image(data)
+            face = _main_face(engine.detect(image), config["FACE_MIN_DETECTION_SCORE"])
+        except FaceProblem:
+            continue  # blurry or missing face mid-turn: just skip this frame
+        if min(face.width, face.height) < config["FACE_MIN_SIZE_PX"]:
+            continue
+        offset = nose_offset(face)
+        if offset is None:
+            continue
+        along = (offset - straight_offset) * direction * config["FACE_YAW_SIGN"]
+        if best[0] is None or along > best[0]:
+            best = (along, (image, face))
+    return best
+
+
+def check_liveness(student, steps, challenge, engine=None):
+    """Head-turn challenge: steps = [straight frames, first-turn frames, second-turn frames].
+
+    challenge "LR": turn to your left, then your right; "RL": the reverse.
+    Raises FaceProblem / FaceNotRegistered when the straight frames cannot be used
+    (nothing was compared). Otherwise returns LivenessResult.
+    """
+    config = current_app.config
+    engine = engine or get_engine()
+    record = student.face
+    if record is None or record.model_name != MODEL_NAME or record.dim != EMBEDDING_DIM:
+        raise FaceNotRegistered(
+            "Your face needs to be registered again.",
+            details={"_body": ["Your face is not registered for the current face system. Ask your faculty to reset it."]},
+        )
+    registered = from_bytes(record.embedding)
+
+    # 1. Straight: full quality checks, looking at the camera, compared with the registration.
+    straight, last_problem = None, None
+    for data in steps[0]:
+        try:
+            sample = analyse(decode_image(data), engine, max_offset=config["FACE_STRAIGHT_MAX_OFFSET"])
+        except FaceProblem as problem:
+            last_problem = problem
+            continue
+        straight = (sample, nose_offset(sample.detection))
+        break
+    if straight is None:
+        raise last_problem or FaceProblem("no_face")
+    sample, straight_offset = straight
+    score = similarity(sample.embedding, registered)
+    distance = max(0.0, 1.0 - score)
+    numbers = [f"sim={score:.3f}", f"straight={straight_offset:+.3f}"]
+    if score < config["FACE_MATCH_THRESHOLD"]:
+        return LivenessResult(False, score, distance, False, None, " ".join(numbers))
+
+    # 2. The two turns, in the order asked, each by the SAME person.
+    for step_number, letter in enumerate(challenge, start=1):
+        along, found = _turn_frame(steps[step_number], STEP_DIRECTION[letter], engine, config, straight_offset)
+        numbers.append(f"turn{step_number}{letter}={'none' if along is None else f'{along:+.3f}'}")
+        if along is None or along < config["FACE_TURN_MIN_OFFSET"]:
+            return LivenessResult(True, score, distance, False, "no_turn", " ".join(numbers))
+        turned = engine.embed(*found)
+        same_as_registration = similarity(turned, registered)
+        same_as_straight = similarity(turned, sample.embedding)
+        numbers.append(f"turn{step_number}sim={same_as_registration:.3f}/{same_as_straight:.3f}")
+        threshold = config["FACE_TURN_MATCH_THRESHOLD"]
+        if same_as_registration < threshold or same_as_straight < threshold:
+            return LivenessResult(True, score, distance, False, "different_person", " ".join(numbers))
+
+    return LivenessResult(True, score, distance, True, None, " ".join(numbers))

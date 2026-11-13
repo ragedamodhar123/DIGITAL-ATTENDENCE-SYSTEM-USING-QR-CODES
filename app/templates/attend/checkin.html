@@ -33,7 +33,8 @@
          data-face-url="{{ url_for('attend_api.face_check', session_id=result.session.id) }}"
          data-scan-url="{{ url_for('student.scan') }}"
          data-home-url="{{ url_for('student.dashboard') }}"
-         data-seconds="{{ seconds_left }}">
+         data-seconds="{{ seconds_left }}"
+         data-challenge="{{ result.challenge }}">
       <h1 class="h3 mb-1" data-field="title">Face check</h1>
       <p class="text-muted mb-3">{{ result.course.code }} {{ result.course.name }}</p>
 
@@ -42,10 +43,11 @@
       <div class="camera camera-small" data-state="idle">
         <video class="camera-video" playsinline muted autoplay aria-label="Camera preview"></video>
         <div class="camera-guide" aria-hidden="true"></div>
+        <div class="turn-arrow" aria-hidden="true"></div>
         <div class="camera-placeholder">Camera is off</div>
       </div>
 
-      <p class="capture-prompt" aria-live="polite">Press "Start camera" and look straight at it.</p>
+      <p class="capture-prompt" aria-live="assertive">Press "Start camera". You will look straight, then turn your head slightly each way when the arrows show.</p>
       <p class="checkin-timer small text-muted text-center" aria-live="off">Time left: <span data-field="seconds">{{ seconds_left }}</span> s</p>
       <div class="alert alert-danger capture-error d-none" role="alert"></div>
       <div class="alert alert-success checkin-done d-none" role="status"></div>

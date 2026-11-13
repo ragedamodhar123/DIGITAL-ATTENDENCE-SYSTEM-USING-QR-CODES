@@ -54,11 +54,11 @@
 
   // One JPEG frame as a data URL, or null if the camera is not ready yet.
   // Drawn un-mirrored: the preview is mirrored (like a mirror), the photo is not.
-  function grab(video) {
+  function grab(video, maxSide) {
     var width = video.videoWidth;
     var height = video.videoHeight;
     if (!width || !height) return null;
-    var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
+    var scale = Math.min(1, (maxSide || MAX_SIDE) / Math.max(width, height));
     var canvas = document.createElement("canvas");
     canvas.width = Math.round(width * scale);
     canvas.height = Math.round(height * scale);

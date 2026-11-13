@@ -20,7 +20,7 @@ def test_migrated_schema_matches_models():
 
 def test_database_is_at_latest_revision():
     version = db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "0002_account_events"
+    assert version == "0003_liveness_challenge"
 
 
 def test_audit_trigger_exists_after_migration():

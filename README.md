@@ -42,9 +42,14 @@ Done
   scanner page, "attendance is open" on the student home, scan log, optional network rule
 - Module 4, Part 4: face check after the scan and marking present (once per session, 3 face
   attempts per check-in, safe under double taps and Stop at the same moment); shared camera.js
+- Module 5, Part 1: manual attendance service (change any record with a reason, attendance
+  for a date with no live session, audit history, session lists and rosters)
+- Liveness (added before Module 5, Part 2): random head-turn challenge in the attendance face
+  check, so a photo or phone screen of a student cannot be used; migration 0003
 
 Next
-- Module 5: faculty results, manual marking and edits for any date (with reasons, audited)
+- Module 5, Part 2: faculty pages for results, editing and past dates
+- Module 5, Part 3: the same through the admin API, Postman update
 - Modules 6 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
@@ -144,7 +149,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 4, Part 4: 652 passed (9 of them need the face models;
+Expected after the liveness part: 704 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -187,7 +192,8 @@ attendance-system/
 │   ├── env.py            Alembic setup (uses the app's database settings)
 │   └── versions/
 │       ├── 0001_initial_schema.py   all tables + append-only audit trigger
-│       └── 0002_account_events.py   account history table + append-only trigger
+│       ├── 0002_account_events.py   account history table + append-only trigger
+│       └── 0003_liveness_challenge.py   head-turn order stored on each check-in
 ├── app/
 │   ├── __init__.py       app factory: config checks, extensions, CLI, /health
 │   ├── cli.py            flask create-admin, seed-demo, download-face-models, close-expired-sessions
@@ -210,7 +216,7 @@ attendance-system/
 │   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
 │   │   ├── js/camera.js          shared front-camera helpers (start, stop, take a photo, errors)
 │   │   ├── js/face-enroll.js     guided registration photos, live checks
-│   │   ├── js/attend-face.js     face check after scanning: countdown, attempts, result
+│   │   ├── js/attend-face.js     face check with head-turn prompts: countdown, attempts, result
 │   │   ├── js/faculty-session.js live QR screen: polling, countdown, offline handling
 │   │   ├── js/student-scan.js    in-app QR scanner; opens only this site's /a/<code> links
 │   │   └── vendor/       bootstrap/ and html5-qrcode/ (downloaded, setup step 6)
@@ -229,6 +235,7 @@ attendance-system/
 │   │   ├── qr_service.py     signed rotating codes, QR as SVG
 │   │   ├── checkin_service.py  scan checks, pending check-in, scan log, network rule
 │   │   ├── attendance_service.py  face check after the scan, marking present
+│   │   ├── manual_service.py  manual changes with reasons, past dates, rosters, history
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -281,6 +288,8 @@ attendance-system/
     ├── test_checkin_routes.py    /a/<code> page, scanner page, student home
     ├── test_attendance_service.py  face check, attempts, timing, marking present
     ├── test_attend_face_routes.py  face-check endpoint and a full class end to end
+    ├── test_manual_service.py  manual changes, past dates, permissions, audit, rosters
+    ├── liveness_helpers.py   builds head-turn checks for tests (live person, photo attack)
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -537,6 +546,72 @@ about 2 seconds.
   `POST /api/attendance/sessions/<id>/face` with `{"image": "data:image/jpeg;base64,..."}`.
 
 
+## Liveness: stopping photos of students
+
+A single photo only proves whose face is in front of the camera, not that a live person is
+there. So the attendance face check asks for a short random head turn:
+
+1. At each scan the server picks a random order: "left then right" or "right then left".
+2. On the phone, "Check my face" shows: look straight, then an arrow and "Turn your head
+   slightly to your LEFT" (or RIGHT), then the other way. Frames are taken automatically
+   (2 straight, 4 per turn, about 4-5 seconds in total).
+3. The server checks: the straight frame matches the registered face (as before); the head
+   really turned each way, in the order asked; and the turned frames are the same person.
+
+How a turn is measured: the nose tip's position between the eyes (from the face detector's
+landmarks), in eye-widths, compared with the same student's own "straight" frame. A real
+slight 20 degree turn moves it about 0.12, because the nose sticks out and shifts towards
+one eye. A flat photo or phone screen, however it is tilted, barely moves it, because a
+flat picture has no depth. Measured with the real detector: the sample photo looking
+"straight" was -0.073 (nobody faces a phone perfectly, which is why turns are measured
+from each student's own straight pose); tilting that photo by 25-40 degrees moved it at
+most about 0.065, and the full photo attack moved it 0.033 against the 0.12 needed.
+
+What it stops: a photo or phone screen held up to the camera; turning the wrong way (a
+pre-recorded video made for the other order); showing a photo for the straight frame and
+then one's own head for the turns. A failed liveness check uses one of the 3 attempts, so
+the trick cannot be retried forever. Not looking straight at the start, or unusable frames,
+do not use an attempt. Each check is logged with its numbers in `scan_logs.detail`, e.g.
+`LR sim=0.871 straight=+0.012 turn1L=+0.183 turn1sim=0.71/0.80 turn2R=+0.164 ...`.
+
+Settings in `app/config.py`: `FACE_STRAIGHT_MAX_OFFSET = 0.15` (roughly facing the camera),
+`FACE_TURN_MIN_OFFSET = 0.12` (movement from straight), `FACE_TURN_MATCH_THRESHOLD = 0.30`,
+`FACE_YAW_SIGN = 1`.
+
+Limits: a very determined student could still use a live video call of the absent friend
+following the arrows, or a deepfake app. Students who cannot turn their head (injury) are
+marked manually by the faculty.
+
+Not covered: two students agreeing that one registers their face on the other's account.
+Liveness cannot detect that (the face is real); faculty supervision of first registration
+is the defence.
+
+
+## Manual attendance and corrections
+
+Who: the admin, or a faculty member assigned to the course (co-teachers included).
+
+- Any change needs a reason (3-500 characters). Each change writes an audit row: old
+  status, new status, reason, who, when. The audit table is append-only, so the history
+  cannot be edited or deleted, even from pgAdmin.
+- A changed record becomes method "manual" with who and when; the original face-check
+  evidence is kept. Several students can be changed at once with one reason, all or
+  nothing; students already at that status are reported as unchanged (no audit row).
+- During a live class: a student who failed the face check 3 times can be marked present;
+  marking a student absent stops them checking in later.
+- A record can be corrected even if the student was dropped or deactivated since. A new
+  record can only be added for a student actively enrolled with an active account.
+- Any date: for a date without a live session, a closed "manual" session is created and
+  every actively enrolled student gets a record (ticked = present, everyone else absent).
+  Future dates are refused (judged in college time). If the course already has attendance
+  on that date, the faculty must confirm it is a second class that day.
+
+Concurrency: all services lock rows in the same order (session, then pending check-in,
+then record). A real parallel test of a manual change and a face check finishing at the
+same moment found a deadlock in the first version; with the fixed order, every round ends
+with exactly one record and no errors.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -660,6 +735,12 @@ sent to the browser; it goes to the server log.
   http://127.0.0.1 or localhost. Open it through the trycloudflare.com address instead.
 - QR code blurred with "Code out of date": the laptop lost its connection to the server
   (or the tunnel stopped). Check the Wi-Fi and that both terminals are running.
+- Students keep getting "We could not see your head turn": look at `scan_logs.detail` for
+  their face checks. The `turn1`/`turn2` values are movement from their straight pose. If
+  they are small (0.05-0.11), they turn too little: tell them to turn a bit more, or lower
+  `FACE_TURN_MIN_OFFSET` slightly (not below 0.09: tilted photos moved up to ~0.065).
+  If the values are large but negative where the arrow asked for positive (and the
+  other way round) for everyone, set `FACE_YAW_SIGN = -1`.
 - Student says "Your face did not match" in normal light: check their registration was
   good (faculty course page shows "Ready"); if needed reset the face and let them register
   again in good light. Repeated mismatches show in `scan_logs` with the similarity score.

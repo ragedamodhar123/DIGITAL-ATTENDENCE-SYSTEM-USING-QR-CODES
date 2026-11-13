@@ -13,6 +13,7 @@ Every scan, accepted or not, is written to scan_logs (who, which session, what
 happened, IP, browser), so suspicious patterns can be reviewed later.
 """
 import ipaddress
+import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -66,6 +67,7 @@ class CheckinResult:
     session: AttendanceSession
     course: Course
     expires_at: object = None       # when the pending check-in runs out (for "ready")
+    challenge: str = None           # head-turn order for the face check: "LR" or "RL"
 
 
 # ---- logging ---------------------------------------------------------------
@@ -134,15 +136,21 @@ def begin_checkin(student, token, ip=None, user_agent=None, now=None):
             raise CheckinRefused("already_recorded")
 
         expires_at = now + timedelta(seconds=current_app.config["PENDING_CHECKIN_SECONDS"])
+        # A fresh random head-turn order for every scan, so a pre-recorded video
+        # would have to match an order picked seconds ago.
+        challenge = secrets.choice(("LR", "RL"))
         # One pending check-in per student per session. Scanning again refreshes its
-        # time, but keeps the number of face attempts already used, so rescanning
-        # cannot be used to get unlimited face attempts.
+        # time and challenge, but keeps the number of face attempts already used, so
+        # rescanning cannot be used to get unlimited face attempts.
         db.session.execute(
             insert(PendingCheckin)
-            .values(session_id=session.id, student_id=student.id, student_role="student", created_at=now, expires_at=expires_at)
+            .values(
+                session_id=session.id, student_id=student.id, student_role="student",
+                created_at=now, expires_at=expires_at, challenge=challenge,
+            )
             .on_conflict_do_update(
                 constraint="uq_pending_checkins_session_id_student_id",
-                set_={"created_at": now, "expires_at": expires_at},
+                set_={"created_at": now, "expires_at": expires_at, "challenge": challenge},
             )
         )
         db.session.commit()
@@ -152,7 +160,7 @@ def begin_checkin(student, token, ip=None, user_agent=None, now=None):
         raise
 
     log_scan(student, "ok", session.id, ip=ip, user_agent=user_agent)
-    return CheckinResult("ready", session, session.course, expires_at)
+    return CheckinResult("ready", session, session.course, expires_at, challenge)
 
 
 def active_pending_checkin(student, session_id, now=None):

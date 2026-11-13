@@ -96,6 +96,7 @@ class PendingCheckin(db.Model):
         CheckConstraint("student_role = 'student'", name="student_role_only"),
         CheckConstraint("face_attempts >= 0 AND face_attempts <= 10", name="face_attempts_range"),
         CheckConstraint("expires_at > created_at", name="expiry_after_create"),
+        CheckConstraint("challenge IN ('LR', 'RL')", name="valid_challenge"),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -105,6 +106,9 @@ class PendingCheckin(db.Model):
     student_id = db.Column(db.Integer, nullable=False)
     student_role = db.Column(db.String(16), nullable=False, default="student", server_default="student")
     face_attempts = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    # Liveness: the order in which the student must turn their head, picked at random
+    # for every scan. "LR" = their left first, then their right; "RL" = the reverse.
+    challenge = db.Column(db.String(2), nullable=False, default="LR", server_default="LR")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=func.now())
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 

@@ -1,5 +1,8 @@
-// Attendance face check: after a scanned code is accepted, take one photo of the
-// student's face and send it. On a match the student is marked present.
+// Attendance face check with liveness: after a scanned code is accepted, the
+// student looks straight, then turns their head slightly one way and then the
+// other, in a random order chosen by the server. A few frames are taken
+// automatically at each step and sent together. A photo or phone screen held up
+// to the camera cannot turn in 3D, so it fails on the server.
 (function () {
   "use strict";
 
@@ -7,7 +10,17 @@
   if (!root || !window.AttendanceApi || !window.AttendanceCamera) return;
   var Camera = window.AttendanceCamera;
 
+  var STRAIGHT_MAX_SIDE = 960;  // the identity check uses the straight frames: keep detail
+  var TURN_MAX_SIDE = 640;      // turn frames only need landmarks: smaller and faster to send
+  var SETTLE_MS = 900;          // time to follow a prompt before frames are taken
+  var FRAME_GAP_MS = 250;
+  var STRAIGHT_FRAMES = 2;
+  var TURN_FRAMES = 4;
+  var TURN_TEXT = { L: "Turn your head slightly to your LEFT", R: "Turn your head slightly to your RIGHT" };
+
   var faceUrl = root.getAttribute("data-face-url");
+  var challenge = root.getAttribute("data-challenge") === "RL" ? "RL" : "LR";
+  var arrow = root.querySelector(".turn-arrow");
   var secondsLeft = parseInt(root.getAttribute("data-seconds"), 10) || 60;
   var camera = root.querySelector(".camera");
   var video = root.querySelector(".camera-video");
@@ -73,7 +86,7 @@
         if (finished) { stopCamera(); return; }  // time ran out while the camera was starting
         camera.setAttribute("data-state", "live");
         showOnly(["capture"]);
-        say("Look straight at the camera, then press Check my face.");
+        say("Press Check my face, then follow the arrows: look straight, then turn your head slightly each way.");
       })
       .catch(function (error) {
         stopCamera();
@@ -89,10 +102,10 @@
     var reason = data.reason;
 
     if (result.status === 401) { window.location.reload(); return; }   // login expired
-    if (reason === "face_mismatch") {
+    if (reason === "face_mismatch" || reason === "liveness_failed") {
       var left = data.attempts_left;
       showError(data.message + (left ? " (" + left + (left === 1 ? " try" : " tries") + " left)" : ""));
-      say("Look straight at the camera, then press Check my face.");
+      say("Press Check my face and follow the arrows again.");
       return;
     }
     if (reason === "too_many_attempts" || reason === "already_recorded" || reason === "session_closed") {
@@ -107,23 +120,75 @@
     }
     // Photo problems (too dark, no face, ...), server busy, rate limit, connection: try again.
     showError(data.message || "Something went wrong. Try again.");
-    say("Look straight at the camera, then press Check my face.");
+    say("Press Check my face and follow the arrows again.");
+  }
+
+  function wait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+
+  function showArrow(letter) {
+    // The preview is mirrored like a mirror, so "your left" points to the left of the screen.
+    if (!arrow) return;
+    arrow.setAttribute("data-dir", letter || "");
+    arrow.textContent = letter === "L" ? "\u2190" : letter === "R" ? "\u2192" : "";
+  }
+
+  // Take `count` frames, FRAME_GAP_MS apart. Resolves to the list, or null if the camera stopped.
+  function takeFrames(count, maxSide) {
+    var frames = [];
+    function next() {
+      if (!stream || finished) return Promise.resolve(null);
+      var frame = Camera.grab(video, maxSide);
+      if (frame) frames.push(frame);
+      if (frames.length >= count) return Promise.resolve(frames);
+      return wait(FRAME_GAP_MS).then(next);
+    }
+    return next();
+  }
+
+  function step(text, letter, count, maxSide) {
+    say(text);
+    showArrow(letter);
+    return wait(SETTLE_MS).then(function () { return takeFrames(count, maxSide); });
   }
 
   function checkFace() {
     if (busy || finished) return;
-    var image = Camera.grab(video);
-    if (!image) { showError("The camera is not ready yet. Wait a moment and try again."); return; }
+    if (!Camera.grab(video)) { showError("The camera is not ready yet. Wait a moment and try again."); return; }
     busy = true;
     buttons.capture.disabled = true;
-    buttons.capture.textContent = "Checking...";
+    buttons.capture.textContent = "Follow the arrows...";
     showError("");
-    window.AttendanceApi.postJSON(faceUrl, { image: image }, { timeoutMs: 30000 }).then(function (result) {
-      busy = false;
-      buttons.capture.disabled = false;
-      buttons.capture.textContent = "Check my face";
-      if (!finished) handleReply(result);
-    });
+
+    var steps = [];
+    step("Look straight at the camera", null, STRAIGHT_FRAMES, STRAIGHT_MAX_SIDE)
+      .then(function (frames) {
+        if (!frames) return null;
+        steps.push(frames);
+        return step(TURN_TEXT[challenge[0]], challenge[0], TURN_FRAMES, TURN_MAX_SIDE);
+      })
+      .then(function (frames) {
+        if (!frames) return null;
+        steps.push(frames);
+        return step(TURN_TEXT[challenge[1]], challenge[1], TURN_FRAMES, TURN_MAX_SIDE);
+      })
+      .then(function (frames) {
+        showArrow(null);
+        if (!frames) return null;   // camera stopped or time ran out mid-sequence
+        steps.push(frames);
+        say("Checking...");
+        buttons.capture.textContent = "Checking...";
+        return window.AttendanceApi.postJSON(faceUrl, { steps: steps }, { timeoutMs: 30000 });
+      })
+      .then(function (result) {
+        busy = false;
+        buttons.capture.disabled = false;
+        buttons.capture.textContent = "Check my face";
+        if (!result) {
+          if (!finished) say("Press \"Check my face\" to try again.");
+          return;
+        }
+        if (!finished) handleReply(result);
+      });
   }
 
   function tick() {

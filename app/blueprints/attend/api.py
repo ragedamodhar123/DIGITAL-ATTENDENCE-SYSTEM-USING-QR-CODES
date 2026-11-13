@@ -5,7 +5,7 @@ from flask_login import current_user
 from ...extensions import limiter
 from ...models import Role
 from ...schemas.common import load_or_fail
-from ...schemas.face_schemas import FaceCheckSchema
+from ...schemas.face_schemas import FaceLivenessSchema
 from ...services import attendance_service, face_service
 from ...utils.decorators import role_required
 from ...utils.ratelimit import current_user_key
@@ -21,12 +21,12 @@ from . import api_bp
     error_message="Too many photos. Wait a few minutes and try again.",
 )
 def face_check(session_id):
-    data = load_or_fail(FaceCheckSchema(), request.get_json(silent=True))
-    image = face_service.decode_data_url(data["image"])
+    data = load_or_fail(FaceLivenessSchema(), request.get_json(silent=True))
+    steps = [[face_service.decode_data_url(url) for url in step] for step in data["steps"]]
     result = attendance_service.complete_checkin(
         current_user._get_current_object(),
         session_id,
-        image,
+        steps,
         ip=request.remote_addr,
         user_agent=request.headers.get("User-Agent"),
     )
