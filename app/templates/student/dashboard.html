@@ -20,14 +20,24 @@
 </section>
 
 <section class="panel">
-  <h2 class="h5 mb-3">Your courses</h2>
-  {% if courses %}
-    <ul class="course-list">
-      {% for course in courses %}
+  <h2 class="h5 mb-1">Your attendance</h2>
+  <p class="text-muted small mb-3">Counts finished classes. Below {{ threshold }}% is highlighted.</p>
+  {% if summaries %}
+    <ul class="attendance-list">
+      {% for s in summaries %}
         <li>
-          <span class="course-code">{{ course.code }}</span>
-          <span class="course-name">{{ course.name }}</span>
-          <span class="course-term text-muted">{{ course.term }}</span>
+          <a href="{{ url_for('student.course', course_id=s.course.id) }}">
+            <span class="course-code">{{ s.course.code }}</span>
+            <span class="course-name">{{ s.course.name }}{% if not s.enrolled %} <span class="text-muted small">(no longer enrolled)</span>{% endif %}</span>
+          </a>
+          <span class="attendance-figure{% if s.below_threshold %} below{% endif %}">
+            {% if s.percent is none %}
+              <span class="text-muted small">no classes yet</span>
+            {% else %}
+              <strong>{{ s.percent }}%</strong>
+              <span class="small text-muted">{{ s.present }} of {{ s.total }}</span>
+            {% endif %}
+          </span>
         </li>
       {% endfor %}
     </ul>
@@ -35,5 +45,4 @@
     <p class="mb-0">You are not enrolled in any courses yet. Ask your faculty or the admin to add you.</p>
   {% endif %}
 </section>
-
 {% endblock %}

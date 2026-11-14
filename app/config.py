@@ -96,6 +96,8 @@ class BaseConfig:
     QR_GRACE_WINDOWS = 1
     PENDING_CHECKIN_SECONDS = 60
     SESSION_MAX_MINUTES = 120
+    # Attendance below this percentage is highlighted for students and in reports.
+    ATTENDANCE_WARNING_PERCENT = 75
 
 
 class DevelopmentConfig(BaseConfig):

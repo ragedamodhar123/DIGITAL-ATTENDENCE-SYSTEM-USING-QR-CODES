@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% set how = {"qr_face": "face check", "manual": "marked by faculty", "auto_absent": "did not check in"} %}
+{% block title %}{{ summary.course.code }}{% endblock %}
+{% block content %}
+<p class="mb-2"><a href="{{ url_for('student.dashboard') }}">Your attendance</a></p>
+
+<section class="panel">
+  <h1 class="h4 mb-1">{{ summary.course.code }} {{ summary.course.name }}</h1>
+  <p class="text-muted mb-3">{{ summary.course.term }}{% if not summary.enrolled %}, no longer enrolled{% endif %}</p>
+  {% if summary.percent is none %}
+    <p class="mb-0">No finished classes yet.</p>
+  {% else %}
+    <div class="live-counts">
+      <div><span class="count{% if summary.below_threshold %} count-bad{% endif %}">{{ summary.percent }}%</span><span class="count-label">attendance</span></div>
+      <div><span class="count">{{ summary.present }}</span><span class="count-label">present</span></div>
+      <div><span class="count">{{ summary.absent }}</span><span class="count-label">absent</span></div>
+    </div>
+    {% if summary.below_threshold %}
+      <div class="alert alert-warning mt-3 mb-0">Your attendance is below {{ threshold }}%.</div>
+    {% endif %}
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2 class="h5 mb-3">Classes</h2>
+  {% if history %}
+    <ul class="class-list">
+      {% for session, record in history %}
+        <li>
+          <span>
+            <span class="fw-semibold">{{ session.session_date.strftime("%a %d %b %Y") }}</span>
+            <span class="text-muted small">{{ session.started_at | localtime }}</span>
+          </span>
+          <span class="text-end">
+            {% if record is none %}
+              <span class="status">running now, not checked in</span>
+            {% elif record.status == "present" %}
+              <span class="status status-ok">Present</span>
+            {% else %}
+              <span class="status status-bad">Absent</span>
+            {% endif %}
+            {% if record %}<span class="d-block small text-muted">{{ how[record.method] }}</span>{% endif %}
+            {% if session.status == "open" and record %}<span class="d-block small text-muted">class still running</span>{% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0">No classes yet.</p>
+  {% endif %}
+  <p class="small text-muted mt-3 mb-0">Think a class is recorded wrongly? Talk to your faculty; they can correct it.</p>
+</section>
+{% endblock %}

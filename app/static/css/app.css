@@ -111,6 +111,18 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
   padding: .75rem; box-shadow: 0 .5rem 1.5rem rgba(16, 23, 42, .15);
 }
 
+/* Student attendance */
+.attendance-list, .class-list { list-style: none; margin: 0; padding: 0; }
+.attendance-list li, .class-list li {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: .625rem 0; border-top: 1px solid var(--line);
+}
+.attendance-list li:first-child, .class-list li:first-child { border-top: 0; }
+.attendance-list a { text-decoration: none; display: grid; grid-template-columns: 5.5rem 1fr; column-gap: .75rem; min-width: 0; }
+.attendance-list a:hover .course-name, .attendance-list a:focus .course-name { text-decoration: underline; }
+.attendance-figure { text-align: right; white-space: nowrap; display: flex; flex-direction: column; }
+.attendance-figure.below strong, .count-bad { color: var(--bad); }
+
 /* Session list on the course page */
 .session-list { list-style: none; margin: 0; padding: 0; }
 .session-list li {

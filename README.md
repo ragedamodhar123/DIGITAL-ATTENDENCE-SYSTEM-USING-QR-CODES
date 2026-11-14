@@ -51,9 +51,12 @@ Done
   attendance for another date
 - Module 5, Part 3: the same through the admin API (sessions, roster, changes, history,
   another date); Postman collection folder "4. Attendance"
+- Module 6, Part 1: students see their own attendance: percentage per course on the home
+  page, and class-by-class history per course
 
 Next
-- Module 6: student attendance view and reports (pandas exports)
+- Module 6, Part 2: reports for faculty and admin (Excel and CSV with pandas)
+- Module 6, Part 3: below-threshold list; reports in the admin API
 - Module 7: hardening and deployment: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
@@ -153,7 +156,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 5, Part 3: 742 passed (15 of them need the face models;
+Expected after Module 6, Part 1: 757 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -207,7 +210,8 @@ attendance-system/
 │   │   ├── admin_api/    /api/admin/... JSON API for Postman (users.py, academic.py, attendance.py)
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
-│   │   ├── student/      /student/ home (open attendance, scan button), /student/scan scanner
+│   │   ├── student/      /student/ home (attendance per course, scan button), /student/courses/<id>
+│   │   │                 class-by-class history, /student/scan scanner
 │   │   ├── attend/       /a/<code> check-in page (routes.py); /api/attendance face check (api.py)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
 │   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py);
@@ -243,6 +247,7 @@ attendance-system/
 │   │   ├── checkin_service.py  scan checks, pending check-in, scan log, network rule
 │   │   ├── attendance_service.py  face check after the scan, marking present
 │   │   ├── manual_service.py  manual changes with reasons, past dates, rosters, history
+│   │   ├── student_attendance_service.py  a student's own totals and class history
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -299,6 +304,7 @@ attendance-system/
     ├── liveness_helpers.py   builds head-turn checks for tests (live person, photo attack)
     ├── test_faculty_records.py  results pages, corrections, history, another date
     ├── test_admin_attendance_api.py  the same through the admin API
+    ├── test_student_attendance.py  student attendance view (totals, history, privacy)
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -634,6 +640,25 @@ Concurrency: all services lock rows in the same order (session, then pending che
 then record). A real parallel test of a manual change and a face check finishing at the
 same moment found a deadlock in the first version; with the fixed order, every round ends
 with exactly one record and no errors.
+
+
+## Student attendance view
+
+The student home page lists each course with the attendance percentage and "3 of 4"
+(present of finished classes). Below `ATTENDANCE_WARNING_PERCENT` (75 by default, in
+`app/config.py`) the figure is shown in red. Each course opens a class-by-class list,
+newest first: date, time, present or absent, and how it was recorded (face check, marked
+by faculty, did not check in). A running class shows "running now, not checked in" until
+the student checks in.
+
+What counts: finished classes that have a record for the student. A running class does not
+count yet; a student enrolled part-way through the term is counted from then on; classes
+recorded by hand for another date count like any other. Dropped courses still show their
+history ("no longer enrolled"); retired courses without history are hidden.
+
+Privacy: students only see their own records, and never the reason a faculty member gave
+for a change (it may mention others); they see "marked by faculty". Another course's page
+gives "not found", whatever its number.
 
 
 ## Using the admin API (Postman)
