@@ -23,6 +23,33 @@
 {% endif %}
 
 <section class="panel">
+  <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+    <h2 class="h5 mb-0">Attendance</h2>
+    {% if course.is_active and entries %}
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('faculty.other_date', course_id=course.id) }}">Record another date</a>
+    {% endif %}
+  </div>
+  {% if sessions %}
+    <ul class="session-list">
+      {% for s, present, absent in sessions %}
+        <li>
+          <a href="{{ url_for('faculty.session', session_id=s.id) }}">
+            <span class="fw-semibold">{{ s.session_date.strftime("%a %d %b %Y") }}</span>
+            <span class="text-muted small">{{ s.started_at | localtime }}{% if s.kind == "manual" %}, recorded by hand{% endif %}</span>
+          </a>
+          <span class="small">
+            {% if s.status == "open" %}<span class="status status-ok">running now</span>
+            {% else %}{{ present }} present, {{ absent }} absent{% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0 text-muted">No attendance taken yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
   <h2 class="h5 mb-3">Students</h2>
   {% if entries %}
     <ul class="roster">

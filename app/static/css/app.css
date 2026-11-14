@@ -111,6 +111,26 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
   padding: .75rem; box-shadow: 0 .5rem 1.5rem rgba(16, 23, 42, .15);
 }
 
+/* Session list on the course page */
+.session-list { list-style: none; margin: 0; padding: 0; }
+.session-list li {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: .5rem 0; border-top: 1px solid var(--line);
+}
+.session-list li:first-child { border-top: 0; }
+.session-list a { text-decoration: none; display: flex; flex-direction: column; }
+.session-list a:hover .fw-semibold, .session-list a:focus .fw-semibold { text-decoration: underline; }
+
+/* Corrections */
+.roster-pick { flex-shrink: 0; margin-top: 0; }
+.roster-row .roster-who { flex: 1; }
+.bulk-marks { margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--line); }
+.history-list { padding-left: 1.25rem; margin: 0; }
+.history-list li { padding: .5rem 0; border-top: 1px solid var(--line); }
+.history-list li:first-child { border-top: 0; }
+.pick-list { list-style: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; }
+.pick-list li { padding: .375rem 0 .375rem 1.75rem; border-top: 1px solid var(--line); }
+
 /* Temporary password: large, spaced, easy to read aloud or copy by hand */
 .temp-password {
   font-size: 2rem; font-weight: 700; letter-spacing: .08em; text-align: center;

@@ -5,7 +5,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from ...models import Role
-from ...services import session_service
+from ...services import manual_service, session_service
 from ...services.errors import Conflict, ValidationFailed
 from ...utils.decorators import role_required
 from . import bp
@@ -37,11 +37,13 @@ def session(session_id):
     attendance = session_service.get_session_for_faculty(current_user, session_id)
     # Phones cannot open "localhost": warn when the QR would point there.
     host = urlsplit(request.host_url).hostname
+    _, roster = manual_service.session_roster(current_user, attendance.id)
     return render_template(
         "faculty/session.html",
         attendance=attendance,
         course=attendance.course,
         counts=session_service.summary(attendance),
+        roster=roster,
         local_address=host in LOCAL_HOSTS,
     )
 

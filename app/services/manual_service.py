@@ -94,7 +94,7 @@ def _get_session(session_id, lock=False):
     return session
 
 
-def _active_students(course_id):
+def active_students(course_id):
     """Students actively enrolled in the course with an active account, by username."""
     return {
         user.username: user
@@ -145,7 +145,7 @@ def set_statuses(actor, session_id, changes, reason, now=None):
                 AttendanceRecord.student_id.in_(student_ids),
             ).with_for_update()
         }
-        active = _active_students(session.course_id)
+        active = active_students(session.course_id)
 
         errors = {}
         for name in changes:
@@ -254,7 +254,7 @@ def create_manual_session(actor, course_id, session_date, present_usernames, rea
                 ]},
             )
 
-    students = _active_students(course.id)
+    students = active_students(course.id)
     if not students:
         raise ValidationFailed("No students are enrolled.", details={"_body": ["Ask the admin to enrol students first."]})
     present = set(present_usernames or [])
@@ -313,7 +313,7 @@ def session_roster(actor, session_id, now=None):
     ) if records else {}
     rows = {r.student.username: RosterRow(r.student, r, counts.get(r.id, 0)) for r in records}
     if session.status == SessionStatus.OPEN:
-        for name, user in _active_students(session.course_id).items():
+        for name, user in active_students(session.course_id).items():
             rows.setdefault(name, RosterRow(user))
     return session, [rows[name] for name in sorted(rows)]
 

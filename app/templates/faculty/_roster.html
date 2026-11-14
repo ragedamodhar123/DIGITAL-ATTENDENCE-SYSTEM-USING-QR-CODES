@@ -1,0 +1,85 @@
+{# Every student of a session, with status, how it was recorded, and correction tools.
+   Used by faculty/session.html for live and finished sessions alike. #}
+{% set method_label = {"qr_face": "face check", "auto_absent": "did not check in"} %}
+<section class="panel" id="roster">
+  <h2 class="h5 mb-1">Students</h2>
+  <p class="text-muted small mb-3">To correct attendance, open "Change" on a student, or tick several and use "Change selected" at the bottom. A reason is always required and every change is recorded.</p>
+
+  {% if roster %}
+  <ul class="roster">
+    {% for row in roster %}
+      {% set s = row.student %}
+      <li class="roster-row">
+        <input type="checkbox" class="form-check-input roster-pick" form="bulk-marks" name="students"
+               value="{{ s.username }}" aria-label="Select {{ s.full_name }}">
+        <div class="roster-who">
+          <div class="fw-semibold">{{ s.full_name }}</div>
+          <div class="text-muted small">{{ s.username | upper }}{% if s.section %}, {{ s.section.code }}{% endif %}</div>
+          <div class="small">
+            {% if row.record is none %}
+              <span class="status">Not checked in yet</span>
+            {% elif row.status == "present" %}
+              <span class="status status-ok">Present</span>
+            {% else %}
+              <span class="status status-bad">Absent</span>
+            {% endif %}
+            {% if row.record %}
+              <span class="text-muted">
+                ({% if row.record.method == "manual" %}marked by {{ row.record.marked_by.full_name if row.record.marked_by else "faculty" }}{% else %}{{ method_label[row.record.method] }}{% endif %},
+                {{ row.record.marked_at | localtime }})
+              </span>
+              {% if row.changes %}
+                <a class="small" href="{{ url_for('faculty.record_history', session_id=attendance.id, username=s.username) }}">changed {{ row.changes }} time{{ '' if row.changes == 1 else 's' }}</a>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+        <details class="row-actions">
+          <summary class="btn btn-sm btn-outline-primary">Change</summary>
+          <div class="row-actions-menu">
+            <form method="post" action="{{ url_for('faculty.change_marks', session_id=attendance.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="students" value="{{ s.username }}">
+              <label class="form-label small" for="reason-{{ s.id }}">Reason</label>
+              <input id="reason-{{ s.id }}" name="reason" class="form-control form-control-sm mb-2"
+                     required minlength="3" maxlength="500" placeholder="e.g. phone battery was dead">
+              <div class="d-grid gap-2">
+                {% if row.status != "present" %}
+                  <button type="submit" name="status" value="present" class="btn btn-sm btn-outline-primary">Mark present</button>
+                {% endif %}
+                {% if row.status != "absent" %}
+                  <button type="submit" name="status" value="absent" class="btn btn-sm btn-outline-danger">Mark absent</button>
+                {% endif %}
+              </div>
+            </form>
+          </div>
+        </details>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form id="bulk-marks" class="bulk-marks" method="post" action="{{ url_for('faculty.change_marks', session_id=attendance.id) }}"
+        data-confirm="Change attendance for all ticked students?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h3 class="h6 mb-2">Change selected</h3>
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-sm-4">
+        <label class="form-label small" for="bulk-status">Set to</label>
+        <select id="bulk-status" name="status" class="form-select">
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+        </select>
+      </div>
+      <div class="col-12 col-sm-8">
+        <label class="form-label small" for="bulk-reason">Reason</label>
+        <input id="bulk-reason" name="reason" class="form-control" required minlength="3" maxlength="500">
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary w-100">Change selected students</button>
+      </div>
+    </div>
+  </form>
+  {% else %}
+    <p class="mb-0">No students in this session.</p>
+  {% endif %}
+</section>

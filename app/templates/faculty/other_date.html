@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Attendance for another date{% endblock %}
+{% macro field_errors(name) -%}
+  {% for message in errors.get(name, []) if message is string %}<div class="invalid-feedback d-block">{{ message }}</div>{% endfor %}
+{%- endmacro %}
+{% block content %}
+<p class="mb-2"><a href="{{ url_for('faculty.course', course_id=course.id) }}">{{ course.code }}</a></p>
+<section class="panel">
+  <h1 class="h4 mb-1">Attendance for another date</h1>
+  <p class="text-muted">For a class held without the QR code (for example, roll taken on paper). Tick the students who were present; everyone else is recorded as absent. This cannot be deleted later, only corrected.</p>
+
+  {% if errors.get("_body") %}<div class="alert alert-danger">{{ errors["_body"][0] }}</div>{% endif %}
+  {% if errors.get("present") %}<div class="alert alert-danger">Some ticked students are not enrolled any more. Reload the page and try again.</div>{% endif %}
+
+  <form method="post" action="{{ url_for('faculty.other_date', course_id=course.id) }}"
+        data-confirm="Save attendance for this date? It can be corrected later but not deleted.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+      <label class="form-label" for="session_date">Class date</label>
+      <input id="session_date" name="session_date" type="date" class="form-control{% if errors.get('session_date') %} is-invalid{% endif %}"
+             value="{{ form.session_date }}" max="{{ today.isoformat() }}" required>
+      {{ field_errors("session_date") }}
+    </div>
+
+    {% if same_day %}
+      <div class="alert alert-warning">
+        <div class="form-check mb-0">
+          <input class="form-check-input" type="checkbox" id="confirm_same_day" name="confirm_same_day" value="yes">
+          <label class="form-check-label" for="confirm_same_day">Yes, this is another class on the same day. Save it as a separate record.</label>
+        </div>
+      </div>
+    {% endif %}
+
+    <fieldset class="mb-3">
+      <legend class="form-label">Present ({{ students | length }} enrolled)</legend>
+      <div class="mb-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-select-all="present">Tick everyone</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-select-none="present">Clear</button>
+      </div>
+      <ul class="pick-list">
+        {% for s in students %}
+          <li class="form-check">
+            <input class="form-check-input" type="checkbox" name="present" value="{{ s.username }}" id="p-{{ s.id }}"
+                   {% if s.username in form.present %}checked{% endif %}>
+            <label class="form-check-label" for="p-{{ s.id }}">{{ s.full_name }} <span class="text-muted small">{{ s.username | upper }}</span></label>
+          </li>
+        {% endfor %}
+      </ul>
+    </fieldset>
+
+    <div class="mb-3">
+      <label class="form-label" for="reason">Reason</label>
+      <input id="reason" name="reason" class="form-control{% if errors.get('reason') %} is-invalid{% endif %}"
+             value="{{ form.reason }}" required minlength="3" maxlength="500" placeholder="e.g. projector broken, roll taken on paper">
+      {{ field_errors("reason") }}
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100">Save attendance</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/select-all.js') }}" defer></script>
+{% endblock %}

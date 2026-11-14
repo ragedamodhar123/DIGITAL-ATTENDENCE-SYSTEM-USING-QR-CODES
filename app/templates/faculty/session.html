@@ -43,22 +43,30 @@
     <ol class="recent-list" data-field="recent"><li class="text-muted">Nobody yet.</li></ol>
   </section>
 
-  <form method="post" action="{{ url_for('faculty.stop_attendance', session_id=attendance.id) }}"
+  <form method="post" action="{{ url_for('faculty.stop_attendance', session_id=attendance.id) }}" class="mb-3"
         data-confirm="Stop attendance? Students who have not checked in will be marked absent.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-outline-danger btn-lg w-100">Stop attendance</button>
   </form>
+
+  <p class="small text-muted">The list below shows students as they were when this page opened. Reload to update it.
+     A student who failed the face check can be marked present here.</p>
+  {% include "faculty/_roster.html" %}
 {% else %}
   <section class="panel">
     <h1 class="h4 mb-1">{{ course.code }} {{ course.name }}</h1>
-    <p class="text-muted">{{ attendance.session_date.strftime("%d %b %Y") }}, attendance closed at {{ attendance.ended_at | localtime }}.</p>
+    <p class="text-muted">
+      {{ attendance.session_date.strftime("%d %b %Y") }},
+      {% if attendance.kind == "manual" %}recorded by hand{% else %}attendance closed at {{ attendance.ended_at | localtime }}{% endif %}.
+    </p>
     <div class="live-counts">
       <div><span class="count">{{ counts.present }}</span><span class="count-label">present</span></div>
       <div><span class="count">{{ counts.absent }}</span><span class="count-label">absent</span></div>
       <div><span class="count">{{ counts.expected }}</span><span class="count-label">total</span></div>
     </div>
   </section>
-  <a class="btn btn-primary w-100" href="{{ url_for('faculty.course', course_id=course.id) }}">Back to {{ course.code }}</a>
+  {% include "faculty/_roster.html" %}
+  <a class="btn btn-outline-primary w-100" href="{{ url_for('faculty.course', course_id=course.id) }}">Back to {{ course.code }}</a>
 {% endif %}
 {% endblock %}
 

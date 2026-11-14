@@ -46,9 +46,11 @@ Done
   for a date with no live session, audit history, session lists and rosters)
 - Liveness (added before Module 5, Part 2): random head-turn challenge in the attendance face
   check, so a photo or phone screen of a student cannot be used; migration 0003
+- Module 5, Part 2: faculty pages: attendance list per course, every student's status in a
+  session with "Change" (single or several, reason required), change history, and recording
+  attendance for another date
 
 Next
-- Module 5, Part 2: faculty pages for results, editing and past dates
 - Module 5, Part 3: the same through the admin API, Postman update
 - Modules 6 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
@@ -149,7 +151,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after the liveness part: 704 passed (15 of them need the face models;
+Expected after Module 5, Part 2: 728 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -206,13 +208,15 @@ attendance-system/
 │   │   ├── student/      /student/ home (open attendance, scan button), /student/scan scanner
 │   │   ├── attend/       /a/<code> check-in page (routes.py); /api/attendance face check (api.py)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
-│   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py)
+│   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py);
+│   │   │                 corrections, history, another date (records.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
 │   │   ├── css/app.css   colours and layout on top of Bootstrap
 │   │   ├── js/page-freshness.js  reloads logged-in pages restored by the Back button
 │   │   ├── js/confirm-forms.js   asks before submitting forms marked data-confirm
+│   │   ├── js/select-all.js      "Tick everyone" / "Clear" buttons on the another-date form
 │   │   ├── js/api.js             postJSON(): sends CSRF token, never throws, readable errors
 │   │   ├── js/camera.js          shared front-camera helpers (start, stop, take a photo, errors)
 │   │   ├── js/face-enroll.js     guided registration photos, live checks
@@ -290,6 +294,7 @@ attendance-system/
     ├── test_attend_face_routes.py  face-check endpoint and a full class end to end
     ├── test_manual_service.py  manual changes, past dates, permissions, audit, rosters
     ├── liveness_helpers.py   builds head-turn checks for tests (live person, photo attack)
+    ├── test_faculty_records.py  results pages, corrections, history, another date
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -605,6 +610,21 @@ Who: the admin, or a faculty member assigned to the course (co-teachers included
   every actively enrolled student gets a record (ticked = present, everyone else absent).
   Future dates are refused (judged in college time). If the course already has attendance
   on that date, the faculty must confirm it is a second class that day.
+
+On the website (faculty):
+
+- Course page, "Attendance": every session, newest first, with present/absent counts, and
+  "Record another date". Click a session to open it.
+- Session page (live or finished): totals, then every student with their status and how it
+  was recorded (face check, did not check in, or marked by whom), and the time. "Change"
+  on a student: type a reason, then "Mark present" or "Mark absent". To change several at
+  once, tick them and use "Change selected" at the bottom (one reason for all). Students
+  already at that status are reported, not changed. "changed N times" opens the history.
+- History page: every change of one student's record, oldest first: old and new status,
+  reason, who and when.
+- "Record another date": pick the date (not in the future), tick who was present ("Tick
+  everyone" / "Clear" help), give a reason, save. If the course already has attendance on
+  that date, the form asks to confirm it is another class on the same day.
 
 Concurrency: all services lock rows in the same order (session, then pending check-in,
 then record). A real parallel test of a manual change and a face check finishing at the
