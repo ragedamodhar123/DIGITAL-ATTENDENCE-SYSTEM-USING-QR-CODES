@@ -54,7 +54,8 @@ def test_every_admin_route_rejects_requests_without_token(web_app, client):
     assert len(rules) >= 20
     for rule in rules:
         path = rule.rule.replace("<int:user_id>", "1").replace("<int:section_id>", "1")
-        path = path.replace("<int:course_id>", "1").replace("<username>", "someone")
+        path = path.replace("<int:course_id>", "1").replace("<int:session_id>", "1").replace("<username>", "someone")
+        assert "<" not in path, f"unhandled placeholder in {rule.rule}"
         for method in rule.methods - {"HEAD", "OPTIONS"}:
             resp = client.open(path, method=method, json={})
             assert resp.status_code == 401, f"{method} {path} -> {resp.status_code}"

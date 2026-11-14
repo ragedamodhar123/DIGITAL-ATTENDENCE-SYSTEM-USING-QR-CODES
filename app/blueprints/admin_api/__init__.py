@@ -8,4 +8,4 @@ from flask import Blueprint
 
 bp = Blueprint("admin_api", __name__, url_prefix="/api/admin")
 
-from . import academic, users  # noqa: E402,F401  (registers the routes on bp)
+from . import academic, attendance, users  # noqa: E402,F401  (registers the routes on bp)

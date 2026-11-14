@@ -26,6 +26,14 @@
     {
       "key": "course_id",
       "value": ""
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "past_date",
+      "value": ""
     }
   ],
   "item": [
@@ -1156,6 +1164,212 @@
               ]
             },
             "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Attendance",
+      "item": [
+        {
+          "name": "Record attendance for another date",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/sessions/manual",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{course_id}}",
+                "sessions",
+                "manual"
+              ]
+            },
+            "description": "For a class held without the QR code. Listed students are present, every other enrolled student absent. session_date is set to yesterday by the pre-request script. Future dates are refused. If the course already has attendance that day: 409, unless allow_same_day is true.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_date\": \"{{past_date}}\",\n  \"present\": [\n    \"cs26c-001\",\n    \"cs26c-002\"\n  ],\n  \"reason\": \"Roll taken on paper (projector broken)\",\n  \"allow_same_day\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = new Date(Date.now() - 24 * 3600 * 1000);",
+                  "pm.collectionVariables.set(\"past_date\", d.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Saved (201), or that date already has attendance (409)\", function () { pm.expect([201, 409]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { pm.collectionVariables.set(\"session_id\", pm.response.json().session.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List course sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{course_id}}",
+                "sessions"
+              ]
+            },
+            "description": "Every session of the course, newest first, with present/absent counts."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session detail (counts and every student)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/sessions/{{session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sessions",
+                "{{session_id}}"
+              ]
+            },
+            "description": "Totals plus each student's status, how it was recorded (qr_face, manual, auto_absent), who marked it and the number of manual changes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change attendance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/sessions/{{session_id}}/marks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sessions",
+                "{{session_id}}",
+                "marks"
+              ]
+            },
+            "description": "One or several students, one reason (3-500 characters). All or nothing. Students already at that status are listed under unchanged. Every change is audited.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"changes\": {\n    \"cs26c-003\": \"present\",\n    \"cs26c-002\": \"absent\"\n  },\n  \"reason\": \"Corrected after checking the class register\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student change history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/sessions/{{session_id}}/students/cs26c-002/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sessions",
+                "{{session_id}}",
+                "students",
+                "cs26c-002",
+                "history"
+              ]
+            },
+            "description": "Every manual change of one student's record in this session, oldest first."
           },
           "event": [
             {

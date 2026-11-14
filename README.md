@@ -49,10 +49,12 @@ Done
 - Module 5, Part 2: faculty pages: attendance list per course, every student's status in a
   session with "Change" (single or several, reason required), change history, and recording
   attendance for another date
+- Module 5, Part 3: the same through the admin API (sessions, roster, changes, history,
+  another date); Postman collection folder "4. Attendance"
 
 Next
-- Module 5, Part 3: the same through the admin API, Postman update
-- Modules 6 to 7: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 6: student attendance view and reports (pandas exports)
+- Module 7: hardening and deployment: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
 
 
 ## Requirements
@@ -151,7 +153,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 5, Part 2: 728 passed (15 of them need the face models;
+Expected after Module 5, Part 3: 742 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -202,7 +204,7 @@ attendance-system/
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
 │   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
-│   │   ├── admin_api/    /api/admin/... JSON API for Postman (users.py, academic.py)
+│   │   ├── admin_api/    /api/admin/... JSON API for Postman (users.py, academic.py, attendance.py)
 │   │   ├── auth/         /login, /logout (POST only), /change-password
 │   │   ├── main/         / (sends each user to their own home page)
 │   │   ├── student/      /student/ home (open attendance, scan button), /student/scan scanner
@@ -228,7 +230,8 @@ attendance-system/
 │   │   ├── common.py     strict schemas, username/email/code fields, load_or_fail()
 │   │   ├── user_schemas.py  create/update/list/output shapes for users
 │   │   ├── academic_schemas.py  sections, courses, assignment, enrolment, roster
-│   │   └── face_schemas.py   photo payloads (data URLs) for the face endpoints
+│   │   ├── face_schemas.py   photo payloads (data URLs) for the face endpoints
+│   │   └── attendance_schemas.py  attendance changes, another date, session/roster/history output
 │   ├── services/         business rules; no Flask request objects inside
 │   │   ├── errors.py     ServiceError types (turned into HTTP errors by the routes)
 │   │   ├── common.py     require_admin, valid_id, commit_or_conflict, escape_like
@@ -295,6 +298,7 @@ attendance-system/
     ├── test_manual_service.py  manual changes, past dates, permissions, audit, rosters
     ├── liveness_helpers.py   builds head-turn checks for tests (live person, photo attack)
     ├── test_faculty_records.py  results pages, corrections, history, another date
+    ├── test_admin_attendance_api.py  the same through the admin API
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -656,6 +660,12 @@ Endpoints (all under `/api/admin`, all need `Authorization: Bearer <token>`):
 - Enrolment: `POST /courses/<id>/enrolments` (body `usernames`),
   `POST /courses/<id>/enrolments/section` (body `section_code`),
   `DELETE /courses/<id>/enrolments/<username>`, `GET /courses/<id>/roster?include_dropped=true`
+- Attendance: `GET /courses/<id>/sessions` (every session with present/absent counts),
+  `GET /sessions/<id>` (totals and every student: status, method, who marked, changes),
+  `POST /sessions/<id>/marks` (body `{"changes": {"stu001": "present"}, "reason": "..."}`),
+  `GET /sessions/<id>/students/<username>/history`,
+  `POST /courses/<id>/sessions/manual` (body `{"session_date": "2026-11-03", "present": [...],
+  "reason": "...", "allow_same_day": false}`)
 
 Responses: single records are wrapped (`{"user": ...}`, `{"course": ...}`); lists are
 `{"items": [...], "total": n, "page": p, "per_page": n}`; errors are
