@@ -53,11 +53,12 @@ Done
   another date); Postman collection folder "4. Attendance"
 - Module 6, Part 1: students see their own attendance: percentage per course on the home
   page, and class-by-class history per course
+- Module 6, Part 2: attendance reports per course (Excel and CSV, optional date range),
+  download form on the faculty course page
 
 Next
-- Module 6, Part 2: reports for faculty and admin (Excel and CSV with pandas)
 - Module 6, Part 3: below-threshold list; reports in the admin API
-- Module 7: hardening and deployment: auth, admin API, face enrolment, attendance sessions, faculty view and manual edits, reports, hardening
+- Module 7: hardening and deployment
 
 
 ## Requirements
@@ -156,7 +157,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 6, Part 1: 757 passed (15 of them need the face models;
+Expected after Module 6, Part 2: 774 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -215,7 +216,7 @@ attendance-system/
 │   │   ├── attend/       /a/<code> check-in page (routes.py); /api/attendance face check (api.py)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
 │   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py);
-│   │   │                 corrections, history, another date (records.py)
+│   │   │                 corrections, history, another date (records.py); report download (reports.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
@@ -248,6 +249,7 @@ attendance-system/
 │   │   ├── attendance_service.py  face check after the scan, marking present
 │   │   ├── manual_service.py  manual changes with reasons, past dates, rosters, history
 │   │   ├── student_attendance_service.py  a student's own totals and class history
+│   │   ├── report_service.py  course reports: pandas grid, Excel (formulas) and CSV
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -305,6 +307,7 @@ attendance-system/
     ├── test_faculty_records.py  results pages, corrections, history, another date
     ├── test_admin_attendance_api.py  the same through the admin API
     ├── test_student_attendance.py  student attendance view (totals, history, privacy)
+    ├── test_reports.py       report contents, Excel formulas and layout, CSV, downloads
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -659,6 +662,35 @@ history ("no longer enrolled"); retired courses without history are hidden.
 Privacy: students only see their own records, and never the reason a faculty member gave
 for a change (it may mention others); they see "marked by faculty". Another course's page
 gives "not found", whatever its number.
+
+
+## Attendance reports
+
+Faculty course page, "Download report": optional From/To dates (empty = all finished
+classes), then "Excel" or "CSV". The admin gets the same reports through the admin API
+(Module 6, Part 3).
+
+One row per student (everyone enrolled now, plus anyone with a record in the period,
+including students who dropped later), one column per finished class, oldest first, labelled
+with date and start time ("(by hand)" for classes recorded later). Cells: P present, A absent,
+blank = no record for that class (for example, enrolled later); blanks do not count. Then
+Present, Classes and Attendance %. Classes still running are left out.
+
+The Excel file: course, term and period at the top; the warning threshold in a labelled
+blue cell (B5, from `ATTENDANCE_WARNING_PERCENT`) with a legend under it; real formulas for
+every total (`COUNTIF`), so correcting a P/A in the downloaded copy updates the totals; a
+"Present in class" row under each class; rows below the threshold highlighted, following
+cell B5 if you change it; header and name columns frozen while scrolling; Arial throughout;
+prints landscape with all columns on one page width. Checked by recalculating generated files
+in LibreOffice: zero formula errors, values match hand-counted ones.
+
+The CSV file: the same table with the totals already calculated; saved as UTF-8 with a
+byte-order mark so Excel shows non-English names correctly.
+
+Formula injection: a name typed as `=HYPERLINK(...)` can never run as a formula. In Excel it
+is stored as a text cell, shown exactly as written; in CSV it gets a leading apostrophe.
+
+Limit: 30 downloads per 10 minutes per faculty member.
 
 
 ## Using the admin API (Postman)

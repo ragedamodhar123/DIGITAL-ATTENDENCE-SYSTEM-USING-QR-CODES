@@ -35,4 +35,6 @@ tzdata>=2024.1
 # QR codes for attendance (drawn as SVG on the server)
 qrcode>=7.4,<9
 
-# Added in later modules: pandas, openpyxl
+# Attendance reports (Excel and CSV)
+pandas>=2.2,<4
+openpyxl>=3.1,<4
