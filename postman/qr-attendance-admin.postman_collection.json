@@ -1384,6 +1384,129 @@
           ]
         }
       ]
+    },
+    {
+      "name": "5. Reports",
+      "item": [
+        {
+          "name": "Course report (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/report?format=json&threshold=75",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{course_id}}",
+                "report"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "threshold",
+                  "value": "75"
+                }
+              ]
+            },
+            "description": "Every student with present, absent, classes, percent and below (threshold). Optional from=YYYY-MM-DD and to=YYYY-MM-DD. Only finished classes count; blank = not enrolled at the time."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Course report (Excel download)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/report?format=xlsx",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{course_id}}",
+                "report"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "xlsx"
+                }
+              ]
+            },
+            "description": "Use Postman's Send > Send and Download to save the .xlsx. format=csv gives the CSV."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Students below threshold",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/below-threshold?threshold=75",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{course_id}}",
+                "below-threshold"
+              ],
+              "query": [
+                {
+                  "key": "threshold",
+                  "value": "75"
+                }
+              ]
+            },
+            "description": "Students under the threshold, lowest attendance first, with how many classes they missed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -2,7 +2,7 @@
 from datetime import date
 from io import BytesIO
 
-from flask import flash, redirect, request, send_file, url_for
+from flask import flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
 
 from ...extensions import limiter
@@ -53,4 +53,31 @@ def course_report(course_id):
         as_attachment=True,
         download_name=report_service.file_name(report, fmt),
         max_age=0,
+    )
+
+
+@bp.get("/courses/<int:course_id>/below-threshold")
+@role_required(Role.FACULTY)
+def below_threshold(course_id):
+    """Students under the attendance threshold (default ATTENDANCE_WARNING_PERCENT)."""
+    back = redirect(url_for("faculty.course", course_id=course_id) + "#report")
+    try:
+        date_from = _parse_date(request.args.get("from"))
+        date_to = _parse_date(request.args.get("to"))
+    except ValueError:
+        flash("Choose valid dates.", "error")
+        return back
+    try:
+        threshold = report_service.valid_threshold(request.args.get("threshold"))
+        report = report_service.build_course_report(current_user, course_id, date_from, date_to)
+    except ValidationFailed as exc:
+        flash(next(iter(exc.details.values()))[0] if exc.details else exc.message, "error")
+        return back
+    return render_template(
+        "faculty/below_threshold.html",
+        report=report,
+        course=report.course,
+        rows=report_service.below_threshold(report, threshold),
+        counted=sum(1 for row in report_service.student_rows(report, threshold) if row["classes"]),
+        threshold=threshold,
     )

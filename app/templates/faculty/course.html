@@ -71,6 +71,9 @@
       <button type="submit" name="format" value="xlsx" class="btn btn-primary flex-fill">Excel</button>
       <button type="submit" name="format" value="csv" class="btn btn-outline-primary flex-fill">CSV</button>
     </div>
+    <button type="submit" class="btn btn-link px-0 mt-2" formaction="{{ url_for('faculty.below_threshold', course_id=course.id) }}">
+      Show students below {{ config.ATTENDANCE_WARNING_PERCENT }}% for these dates
+    </button>
   </form>
 </section>
 {% endif %}

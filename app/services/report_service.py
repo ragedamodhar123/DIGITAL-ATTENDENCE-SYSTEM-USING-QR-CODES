@@ -273,3 +273,45 @@ def to_xlsx(report):
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+# ---- summaries (screens, JSON, below-threshold list) -----------------------------
+
+def student_rows(report, threshold=None):
+    """One dict per student with totals, for screens and JSON. Same numbers as the files."""
+    if threshold is None:
+        threshold = current_app.config["ATTENDANCE_WARNING_PERCENT"]
+    rows = []
+    for student in report.students:
+        present, classes, percent = report.totals(student.id)
+        rows.append({
+            "username": student.username,
+            "full_name": student.full_name,
+            "section_code": student.section.code if student.section else None,
+            "present": present,
+            "absent": classes - present,
+            "classes": classes,
+            "percent": percent,
+            "below": percent is not None and percent < threshold,
+        })
+    return rows
+
+
+def below_threshold(report, threshold=None):
+    """Students under the threshold, lowest attendance first. Students with no
+    finished classes yet are not listed (there is nothing to judge)."""
+    rows = [row for row in student_rows(report, threshold) if row["below"]]
+    return sorted(rows, key=lambda row: (row["percent"], row["username"]))
+
+
+def valid_threshold(raw):
+    """'' / None -> the configured default; otherwise a whole number 1-100, else ValidationFailed."""
+    if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+        return current_app.config["ATTENDANCE_WARNING_PERCENT"]
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = None
+    if value is None or not 1 <= value <= 100:
+        raise ValidationFailed("Invalid threshold.", details={"threshold": ["Use a whole number from 1 to 100."]})
+    return value

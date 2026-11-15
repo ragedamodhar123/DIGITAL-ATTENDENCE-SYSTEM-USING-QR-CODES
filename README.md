@@ -55,9 +55,10 @@ Done
   page, and class-by-class history per course
 - Module 6, Part 2: attendance reports per course (Excel and CSV, optional date range),
   download form on the faculty course page
+- Module 6, Part 3: students-below-threshold page for faculty; reports (JSON, Excel, CSV)
+  and below-threshold list in the admin API; Postman folder "5. Reports"
 
 Next
-- Module 6, Part 3: below-threshold list; reports in the admin API
 - Module 7: hardening and deployment
 
 
@@ -157,7 +158,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 6, Part 2: 774 passed (15 of them need the face models;
+Expected after Module 6, Part 3: 803 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -216,7 +217,8 @@ attendance-system/
 │   │   ├── attend/       /a/<code> check-in page (routes.py); /api/attendance face check (api.py)
 │   │   ├── faculty/      dashboard, course roster, passwords, face reset (routes.py);
 │   │   │                 start/live screen/stop (sessions.py); /api/faculty live JSON (api.py);
-│   │   │                 corrections, history, another date (records.py); report download (reports.py)
+│   │   │                 corrections, history, another date (records.py); report download and
+│   │   │                 students below threshold (reports.py)
 │   │   └── face/         /face/enroll page (routes.py) and /api/face/check|enroll (api.py)
 │   ├── templates/        Jinja pages: base.html, auth/, student/, faculty/, face/, errors/
 │   ├── static/
@@ -308,6 +310,7 @@ attendance-system/
     ├── test_admin_attendance_api.py  the same through the admin API
     ├── test_student_attendance.py  student attendance view (totals, history, privacy)
     ├── test_reports.py       report contents, Excel formulas and layout, CSV, downloads
+    ├── test_below_threshold.py  below-threshold list (page and API), report API
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -692,6 +695,11 @@ is stored as a text cell, shown exactly as written; in CSV it gets a leading apo
 
 Limit: 30 downloads per 10 minutes per faculty member.
 
+Students below the threshold: under the report form, "Show students below 75% for these
+dates" lists every student under the threshold, lowest attendance first, with their
+percentage and "missed N of M". The threshold can be changed on that page (1-100). Students
+with no finished classes yet are not listed (nothing to judge).
+
 
 ## Using the admin API (Postman)
 
@@ -717,6 +725,9 @@ Endpoints (all under `/api/admin`, all need `Authorization: Bearer <token>`):
 - Enrolment: `POST /courses/<id>/enrolments` (body `usernames`),
   `POST /courses/<id>/enrolments/section` (body `section_code`),
   `DELETE /courses/<id>/enrolments/<username>`, `GET /courses/<id>/roster?include_dropped=true`
+- Reports: `GET /courses/<id>/report?format=json|xlsx|csv&from=YYYY-MM-DD&to=YYYY-MM-DD&threshold=75`
+  (JSON: every student with present, absent, classes, percent, below; xlsx/csv: the same
+  files faculty download), `GET /courses/<id>/below-threshold?threshold=75&from=&to=`
 - Attendance: `GET /courses/<id>/sessions` (every session with present/absent counts),
   `GET /sessions/<id>` (totals and every student: status, method, who marked, changes),
   `POST /sessions/<id>/marks` (body `{"changes": {"stu001": "present"}, "reason": "..."}`),

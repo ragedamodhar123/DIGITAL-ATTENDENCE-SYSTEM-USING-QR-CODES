@@ -1,7 +1,7 @@
 """Input and output shapes for attendance results and corrections (admin API)."""
 from marshmallow import fields, validate
 
-from .common import StrictSchema, Username
+from .common import QuerySchema, StrictSchema, Username
 
 STATUS = validate.OneOf(["present", "absent"], error="Use present or absent.")
 MAX_CHANGES = 500
@@ -59,3 +59,12 @@ class AuditOutSchema(StrictSchema):
     reason = fields.String()
     by = fields.Function(lambda a: a.changed_by.username)
     at = fields.DateTime(attribute="changed_at")
+
+
+class ReportQuerySchema(QuerySchema):
+    """?format=json|xlsx|csv&from=2026-11-01&to=2026-11-30&threshold=75 (all optional)."""
+
+    format = fields.String(load_default="json", validate=validate.OneOf(["json", "xlsx", "csv"]))
+    date_from = fields.Date(data_key="from", load_default=None)
+    date_to = fields.Date(data_key="to", load_default=None)
+    threshold = fields.Integer(load_default=None, validate=validate.Range(min=1, max=100))

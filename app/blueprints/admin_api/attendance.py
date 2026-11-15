@@ -1,19 +1,22 @@
 """Admin API: attendance results, corrections, history and other dates."""
-from flask import jsonify
+from io import BytesIO
+
+from flask import current_app, jsonify, send_file
 
 from ...schemas.attendance_schemas import (
     AttendanceChangeSchema,
+    ReportQuerySchema,
     AuditOutSchema,
     ManualSessionSchema,
     RosterRowOutSchema,
     SessionOutSchema,
 )
-from ...services import manual_service, session_service
+from ...services import manual_service, report_service, session_service
 from ...services.errors import NotFound
 from ...utils.decorators import admin_token_required
 from ...utils.validators import is_valid_username, normalize_username
 from . import bp
-from .helpers import admin, body
+from .helpers import admin, body, query
 
 session_out = SessionOutSchema()
 row_out = RosterRowOutSchema()
@@ -78,3 +81,54 @@ def manual_session(course_id):
         allow_same_day=data["allow_same_day"],
     )
     return jsonify(session=session_out.dump(session), counts=session_service.summary(session), summary=_summary(summary)), 201
+
+
+FILE_TYPES = {
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "csv": "text/csv; charset=utf-8",
+}
+
+
+def _report_json(report, threshold):
+    return {
+        "course": {"id": report.course.id, "code": report.course.code, "name": report.course.name, "term": report.course.term},
+        "period": {
+            "from": report.date_from.isoformat() if report.date_from else None,
+            "to": report.date_to.isoformat() if report.date_to else None,
+        },
+        "threshold": threshold,
+        "classes": [
+            {"session_id": s.id, "session_date": s.session_date.isoformat(), "label": report.column_label(s), "kind": s.kind}
+            for s in report.sessions
+        ],
+    }
+
+
+@bp.get("/courses/<int:course_id>/report")
+@admin_token_required
+def course_report(course_id):
+    """?format=json (default) | xlsx | csv, optional from/to dates and threshold (JSON only)."""
+    options = query(ReportQuerySchema())
+    report = report_service.build_course_report(admin(), course_id, options["date_from"], options["date_to"])
+    if options["format"] in FILE_TYPES:
+        render = report_service.to_xlsx if options["format"] == "xlsx" else report_service.to_csv
+        return send_file(
+            BytesIO(render(report)), mimetype=FILE_TYPES[options["format"]], as_attachment=True,
+            download_name=report_service.file_name(report, options["format"]), max_age=0,
+        )
+    threshold = options["threshold"] or current_app.config["ATTENDANCE_WARNING_PERCENT"]
+    body = _report_json(report, threshold)
+    body["students"] = report_service.student_rows(report, threshold)
+    return jsonify(body)
+
+
+@bp.get("/courses/<int:course_id>/below-threshold")
+@admin_token_required
+def below_threshold(course_id):
+    options = query(ReportQuerySchema())
+    report = report_service.build_course_report(admin(), course_id, options["date_from"], options["date_to"])
+    threshold = options["threshold"] or current_app.config["ATTENDANCE_WARNING_PERCENT"]
+    body = _report_json(report, threshold)
+    body["students"] = report_service.below_threshold(report, threshold)
+    body["count"] = len(body["students"])
+    return jsonify(body)
