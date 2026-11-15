@@ -57,9 +57,12 @@ Done
   download form on the faculty course page
 - Module 6, Part 3: students-below-threshold page for faculty; reports (JSON, Excel, CSV)
   and below-threshold list in the admin API; Postman folder "5. Reports"
+- Module 7, Part 1: security hardening (strict Content-Security-Policy, extra security
+  headers, trusted host names, __Host- cookies and HSTS in production, security logging)
 
 Next
-- Module 7: hardening and deployment
+- Module 7, Part 2: production setup on Windows (waitress, backups, log files)
+- Module 7, Part 3: deployment guide and pre-class checklist
 
 
 ## Requirements
@@ -158,7 +161,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 6, Part 3: 803 passed (15 of them need the face models;
+Expected after Module 7, Part 1: 820 passed (15 of them need the face models;
 without the models they show as skipped).
 
 App (development):
@@ -311,6 +314,7 @@ attendance-system/
     ├── test_student_attendance.py  student attendance view (totals, history, privacy)
     ├── test_reports.py       report contents, Excel formulas and layout, CSV, downloads
     ├── test_below_threshold.py  below-threshold list (page and API), report API
+    ├── test_hardening.py     security headers and policy, code scans, production settings, logging
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -699,6 +703,38 @@ Students below the threshold: under the report form, "Show students below 75% fo
 dates" lists every student under the threshold, lowest attendance first, with their
 percentage and "missed N of M". The threshold can be changed on that page (1-100). Students
 with no finished classes yet are not listed (nothing to judge).
+
+
+## Security
+
+Already in place from earlier modules: Argon2 password hashing; identical login errors and
+timing; rate limits; CSRF tokens on every form and browser request (only the token-based
+admin API is exempt, which a test checks); role checks on every route (a test fails if a
+route has none); safe redirects; append-only audit tables; nothing cached for logged-in
+pages; spreadsheet formula injection blocked in reports.
+
+Added in Module 7, Part 1:
+
+- Content-Security-Policy on every response: scripts and styles only from this site, nothing
+  from other sites, no framing. Tests scan every template and script so nobody can add
+  inline code, inline styles, `|safe` or `eval` later. Every page was also checked in a real
+  headless Chrome with the policy on (login, faculty pages, live QR screen, scanner, face
+  pages, logout): no violations, no errors.
+- More headers: `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin`;
+  in production, `Strict-Transport-Security` (browsers then use HTTPS only).
+- `TRUSTED_HOSTS` (in `.env`): in production, set it to your domain; requests for any other
+  host name get a plain "400 unknown host name". The app logs a warning in production if it
+  is not set.
+- Production cookies are named `__Host-session` and `__Host-remember`: browsers only accept
+  them over HTTPS for this exact site, so another subdomain cannot set or replace them.
+- Security log lines (warnings): failed logins (username and IP, never the password) and
+  rejected admin API calls. Bug fixed: the migration tool's logging setup used to switch off
+  the app's own logger in the same process, silently dropping these lines.
+- Bug fixed: with `TRUSTED_HOSTS` set, a request for an unknown host crashed the error page
+  (500) instead of answering 400.
+
+Worth doing yourself from time to time: `pip install pip-audit` then `pip-audit -r
+requirements.txt` to check the libraries for published security problems.
 
 
 ## Using the admin API (Postman)

@@ -53,6 +53,9 @@ def login():
     try:
         user = auth_service.authenticate(username, password)
     except AuthenticationFailed as exc:
+        current_app.logger.warning(
+            "failed login for %r from %s", username.strip().lower()[:64], request.remote_addr
+        )
         # 401 + the same message for every failure; the username is kept so the
         # student does not retype it, the password is never sent back.
         return (

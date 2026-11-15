@@ -5,7 +5,7 @@ Pages get the errors/error.html template with a plain-language message.
 """
 from flask import jsonify, render_template
 from flask_wtf.csrf import CSRFError
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, SecurityError
 
 from ..extensions import db
 from ..services.errors import ServiceError
@@ -53,6 +53,10 @@ def register_error_handlers(app):
     @app.errorhandler(HTTPException)
     def handle_http_error(exc):
         status = exc.code or 500
+        if isinstance(exc, SecurityError):
+            # Untrusted Host header (TRUSTED_HOSTS): no links can be built for an unknown
+            # host, so answer with plain text instead of the normal error page.
+            return "Bad request: unknown host name.", 400, {"Content-Type": "text/plain; charset=utf-8"}
         if wants_json():
             return json_error(status, _http_code(exc), exc.description or exc.name)
         if status == 429:

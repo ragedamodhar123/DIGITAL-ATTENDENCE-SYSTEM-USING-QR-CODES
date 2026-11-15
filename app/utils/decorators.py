@@ -108,6 +108,9 @@ def admin_token_required(view):
 
         admin = admin_from_auth_header(request.headers.get("Authorization"))
         if admin is None:
+            from flask import current_app
+
+            current_app.logger.warning("rejected admin API call to %s from %s", request.path, request.remote_addr)
             response, status = json_error(401, "invalid_token", "Missing or invalid API token.")
             response.headers["WWW-Authenticate"] = 'Bearer realm="admin-api"'
             return response, status

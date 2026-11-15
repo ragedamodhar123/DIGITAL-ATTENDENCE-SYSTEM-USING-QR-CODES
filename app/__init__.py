@@ -13,6 +13,19 @@ from .config import BASE_DIR, CONFIG_BY_NAME
 from .extensions import csrf, db, limiter, login_manager, migrate
 
 MIN_PRODUCTION_SECRET_LENGTH = 32
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
 REQUIRED_DRIVER = "postgresql+psycopg"
 MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
 
@@ -33,6 +46,11 @@ def create_app(config_name=None):
 
     _validate_config(app)
     _configure_logging(app)
+    if name == "production" and not app.config.get("TRUSTED_HOSTS"):
+        app.logger.warning(
+            "TRUSTED_HOSTS is not set: requests with any Host header are accepted. "
+            "Set it to your site's domain in .env for production."
+        )
     _configure_proxy(app)
     _init_extensions(app)
     _register_auth_handlers()
@@ -188,6 +206,16 @@ def _register_blueprints(app):
 def _register_security_headers(app):
     @app.after_request
     def add_security_headers(response):
+        # Content-Security-Policy: scripts and styles only from this site (no inline
+        # code anywhere, checked by tests), nothing loaded from other sites, and the
+        # page cannot be framed. Images may also be data:/blob: (Bootstrap icons, the
+        # QR scanner). This limits the damage of any future HTML-injection bug.
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        if app.config.get("HSTS_ENABLED") and request.is_secure:
+            # Browsers remember to use HTTPS only for this site for a year.
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "same-origin")

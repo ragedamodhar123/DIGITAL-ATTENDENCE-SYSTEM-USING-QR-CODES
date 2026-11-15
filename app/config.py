@@ -58,6 +58,11 @@ class BaseConfig:
     RATELIMIT_LOGIN_PER_IP = "300 per 5 minutes"    # whole classroom behind one college IP
 
     TRUSTED_PROXY_COUNT = _int_env("TRUSTED_PROXY_COUNT", 0)
+    # Accept requests only for these host names (e.g. "attendance.college.edu"), comma
+    # separated. Empty = any host (fine for development and the trycloudflare tunnel).
+    # Blocks "Host header" tricks, e.g. making the QR link point to another site.
+    TRUSTED_HOSTS = [h.strip() for h in os.environ.get("TRUSTED_HOSTS", "").split(",") if h.strip()] or None
+    HSTS_ENABLED = False
 
     # Face checks (Module 3). Calibrated on the official OpenCV models; see README "Face checks".
     FACE_MODEL_DIR = os.environ.get("FACE_MODEL_DIR", os.path.join(BASE_DIR, "models"))
@@ -120,6 +125,11 @@ class ProductionConfig(BaseConfig):
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
     PREFERRED_URL_SCHEME = "https"
+    HSTS_ENABLED = True
+    # "__Host-" cookies are only accepted by browsers over HTTPS, for this exact site,
+    # path "/": they cannot be set or overwritten by another subdomain.
+    SESSION_COOKIE_NAME = "__Host-session"
+    REMEMBER_COOKIE_NAME = "__Host-remember"
 
 
 CONFIG_BY_NAME = {
