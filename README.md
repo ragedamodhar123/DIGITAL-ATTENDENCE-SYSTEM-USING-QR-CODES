@@ -59,9 +59,10 @@ Done
   and below-threshold list in the admin API; Postman folder "5. Reports"
 - Module 7, Part 1: security hardening (strict Content-Security-Policy, extra security
   headers, trusted host names, __Host- cookies and HSTS in production, security logging)
+- Module 7, Part 2: production setup on Windows: `serve.py` (waitress) with readiness
+  checks, `flask check`, rotating log files, verified backups and restore, start/backup scripts
 
 Next
-- Module 7, Part 2: production setup on Windows (waitress, backups, log files)
 - Module 7, Part 3: deployment guide and pre-class checklist
 
 
@@ -161,8 +162,9 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 7, Part 1: 820 passed (15 of them need the face models;
-without the models they show as skipped).
+Expected after Module 7, Part 2: 839 passed (15 need the face models; the backup tests need
+pg_dump, found on PATH, in PG_BIN, or in C:\Program Files\PostgreSQL\<version>\bin; tests
+that cannot run show as skipped).
 
 App (development):
 
@@ -197,7 +199,11 @@ attendance-system/
 ├── .gitignore
 ├── pytest.ini
 ├── requirements.txt
-├── wsgi.py               entry point for flask and waitress
+├── wsgi.py               entry point for the flask command
+├── serve.py              production server (waitress), runs the readiness checks first
+├── scripts/
+│   ├── start_server.bat  starts serve.py (double-click or Task Scheduler)
+│   └── backup_db.bat     nightly backup + close forgotten sessions, logs to logs\backup.log
 ├── README.md
 ├── models/               face model files (downloaded, not in git)
 ├── migrations/
@@ -208,7 +214,8 @@ attendance-system/
 │       └── 0003_liveness_challenge.py   head-turn order stored on each check-in
 ├── app/
 │   ├── __init__.py       app factory: config checks, extensions, CLI, /health
-│   ├── cli.py            flask create-admin, seed-demo, download-face-models, close-expired-sessions
+│   ├── cli.py            flask create-admin, seed-demo, download-face-models, close-expired-sessions,
+│   │                     check, backup-db, restore-db
 │   ├── config.py         Development / Testing / Production settings
 │   ├── extensions.py     db, migrate, login_manager, csrf, limiter
 │   ├── blueprints/       routes, one folder per area (thin: read input, call service, respond)
@@ -255,6 +262,7 @@ attendance-system/
 │   │   ├── manual_service.py  manual changes with reasons, past dates, rosters, history
 │   │   ├── student_attendance_service.py  a student's own totals and class history
 │   │   ├── report_service.py  course reports: pandas grid, Excel (formulas) and CSV
+│   │   ├── ops_service.py    readiness checks, verified backups (pg_dump), restore
 │   │   ├── auth_service.py   login, password rules, password change, admin token
 │   │   ├── course_service.py course lists for the dashboards
 │   │   └── user_service.py   create/edit/deactivate users, bulk create, temporary passwords
@@ -315,6 +323,7 @@ attendance-system/
     ├── test_reports.py       report contents, Excel formulas and layout, CSV, downloads
     ├── test_below_threshold.py  below-threshold list (page and API), report API
     ├── test_hardening.py     security headers and policy, code scans, production settings, logging
+    ├── test_ops.py           readiness, log files, backup/restore (real pg_dump), serve.py
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -737,6 +746,55 @@ Worth doing yourself from time to time: `pip install pip-audit` then `pip-audit 
 requirements.txt` to check the libraries for published security problems.
 
 
+## Production on Windows
+
+Development uses `flask --app wsgi run`. For real classes use waitress through `serve.py`:
+
+1. In `.env`: `FLASK_CONFIG=production`, a long random `SECRET_KEY`, and (with a tunnel or
+   reverse proxy) `TRUSTED_PROXY_COUNT=1`. Set `TRUSTED_HOSTS` once you have a fixed domain.
+2. `flask --app wsgi check` shows a readiness checklist: settings, database, schema up to
+   date, face models, browser libraries, host/proxy settings, time zone, backup tools. Each
+   line is OK, WARN or FAIL, with what to do.
+3. `python serve.py` (or double-click `scripts\start_server.bat`) runs the same checks and
+   refuses to start if anything FAILs; then serves on `127.0.0.1:8000` with 8 threads
+   (`HOST`, `PORT`, `WAITRESS_THREADS` in `.env`). Point cloudflared at that port:
+   `cloudflared tunnel --url http://localhost:8000`.
+
+Production settings need HTTPS: the login cookie is Secure (`__Host-session`), so over plain
+`http://` (except `localhost`) browsers drop it and login silently fails. Use the tunnel or a
+proper HTTPS setup (Module 7, Part 3).
+
+Start automatically when you log in to Windows (Command Prompt as administrator, adjust the path):
+`schtasks /Create /TN "Attendance server" /TR "\"E:\Develop\QR_ATTENDENCE\scripts\start_server.bat\"" /SC ONLOGON`
+
+Log files: in production, `logs\attendance.log` (app and waitress messages: startup, failed
+logins, rejected admin calls, backups, errors). It rolls over at 5 MB and the last 10 files are
+kept. Set `LOG_DIR` to put them elsewhere.
+
+
+## Backups
+
+`flask --app wsgi backup-db` writes a compressed PostgreSQL backup to `backups\` (or
+`BACKUP_DIR`), named like `attendance_dev_20261115_223137.dump`. It is checked with
+`pg_restore --list` before it gets its final name, so a broken backup is never kept as if it
+were good. Only the newest 14 (`BACKUP_KEEP`) are kept. The database password is passed to
+pg_dump privately (environment variable), never on the command line.
+
+If pg_dump is not found, set `PG_BIN` in `.env` to PostgreSQL's bin folder (for example
+`C:\Program Files\PostgreSQL\17\bin`); `flask check` shows whether it is found.
+
+Nightly backup with Task Scheduler (Command Prompt as administrator, adjust the path):
+`schtasks /Create /TN "Attendance backup" /TR "\"E:\Develop\QR_ATTENDENCE\scripts\backup_db.bat\"" /SC DAILY /ST 23:30`
+The script also closes any forgotten attendance sessions, and appends its output to
+`logs\backup.log`; check that file now and then. Copy the backups folder to another disk or
+cloud storage regularly: a backup on the same disk does not survive that disk failing.
+
+Restore (replaces ALL current data): stop the server, then
+`flask --app wsgi restore-db backups\attendance_dev_20261115_223137.dump`. It asks you to type
+the database name to confirm. The restore runs as one transaction: if it fails, the database is
+left as it was. Start the server again afterwards.
+
+
 ## Using the admin API (Postman)
 
 1. Start the app: `flask --app wsgi run`.
@@ -882,6 +940,10 @@ sent to the browser; it goes to the server log.
   `app/static/vendor/html5-qrcode/` (setup step 6). Students can still use the camera app.
 - Every scan says "Connect to the college Wi-Fi": `ATTENDANCE_ALLOWED_NETWORKS` does not
   include the network's public IP. Check the scan log for the IPs seen, or leave it empty.
+- `python serve.py` says "Not starting": fix the FAIL lines it prints (or run
+  `flask --app wsgi check` to see them again).
+- Login does nothing in production mode: you are on plain http. Use the https tunnel address.
+- `backup-db` says pg_dump not found: set `PG_BIN` in `.env` (see Backups).
 - `ZoneInfoNotFoundError: 'No time zone found with key Asia/Kolkata'`: the `tzdata` package
   is missing (Windows has no built-in timezone data). Run `pip install -r requirements.txt`.
 - `download-face-models` fails: check the internet connection and run it again; a

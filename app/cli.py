@@ -4,6 +4,9 @@ create-admin          First admin account and its API token (for Postman).
 seed-demo             Demo sections, faculty, students, courses and enrolments.
 download-face-models  The two OpenCV face model files (about 39 MB), checksum-verified.
 close-expired-sessions  Close attendance sessions left open past their time limit.
+check                 Readiness checklist (settings, database, schema, models, files...).
+backup-db             Verified PostgreSQL backup into BACKUP_DIR, keeping the newest BACKUP_KEEP.
+restore-db FILE       Replace the database with a backup (asks for confirmation).
 
 These are Flask commands rather than loose scripts so they automatically
 load .env, use the same config checks as the app, and can be tested.
@@ -27,6 +30,9 @@ def register_cli(app):
     app.cli.add_command(seed_demo)
     app.cli.add_command(download_face_models)
     app.cli.add_command(close_expired_sessions_command)
+    app.cli.add_command(check_command)
+    app.cli.add_command(backup_db_command)
+    app.cli.add_command(restore_db_command)
 
 
 # ---- create-admin --------------------------------------------------------
@@ -288,3 +294,65 @@ def close_expired_sessions_command():
 
     closed = close_expired_sessions()
     click.echo(f"Closed {closed} expired session(s).")
+
+
+# ---- check / backup-db / restore-db -------------------------------------------
+
+def print_readiness(results):
+    """Print the checklist; return True if nothing FAILed."""
+    for item in results:
+        click.echo(f"  [{item.status:<4}] {item.name}: {item.message}")
+    failed = [r for r in results if r.status == "FAIL"]
+    warned = [r for r in results if r.status == "WARN"]
+    if failed:
+        click.echo(f"{len(failed)} problem(s) must be fixed before using the app.")
+    elif warned:
+        click.echo(f"Ready, with {len(warned)} warning(s) worth fixing.")
+    else:
+        click.echo("Ready.")
+    return not failed
+
+
+@click.command("check")
+def check_command():
+    """Readiness checklist. Exit code 1 if anything must be fixed."""
+    from .services.ops_service import readiness
+
+    if not print_readiness(readiness()):
+        raise SystemExit(1)
+
+
+@click.command("backup-db")
+def backup_db_command():
+    """Back up the database (verified), deleting backups beyond BACKUP_KEEP."""
+    from .services.ops_service import BackupError, backup_database
+
+    try:
+        path, size, removed = backup_database()
+    except BackupError as exc:
+        raise click.ClickException(f"Backup failed: {exc}") from exc
+    click.echo(f"Backup written and verified: {path} ({size / 1024:.0f} KB)")
+    if removed:
+        click.echo(f"Removed {len(removed)} older backup(s).")
+
+
+@click.command("restore-db")
+@click.argument("backup_file", type=click.Path(dir_okay=False))
+@click.option("--yes", is_flag=True, help="Skip the confirmation question (for scripts).")
+def restore_db_command(backup_file, yes):
+    """Replace ALL current data with the contents of BACKUP_FILE."""
+    from flask import current_app
+
+    from .services.ops_service import BackupError, restore_database
+
+    database = current_app.config["SQLALCHEMY_DATABASE_URI"].rsplit("/", 1)[-1]
+    if not yes:
+        click.echo(f"This deletes everything currently in '{database}' and replaces it with {backup_file}.")
+        typed = click.prompt("Type the database name to continue", default="", show_default=False)
+        if typed.strip() != database:
+            raise click.ClickException("Cancelled: the name did not match. Nothing was changed.")
+    try:
+        restore_database(backup_file)
+    except BackupError as exc:
+        raise click.ClickException(f"Restore failed (the database was not changed): {exc}") from exc
+    click.echo(f"Restored '{database}' from {backup_file}. Restart the server.")

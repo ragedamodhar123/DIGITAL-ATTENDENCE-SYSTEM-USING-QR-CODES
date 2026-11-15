@@ -10,3 +10,7 @@ requirements.lock
 
 # Face model files (downloaded with: flask --app wsgi download-face-models)
 models/
+
+# Operations
+logs/
+backups/

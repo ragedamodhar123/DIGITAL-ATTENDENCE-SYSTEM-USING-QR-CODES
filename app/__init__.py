@@ -141,8 +141,32 @@ def _check_database_separation(app, url):
             )
 
 
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+LOG_FILE_BYTES = 5 * 1024 * 1024
+LOG_FILE_COUNT = 10
+
+
 def _configure_logging(app):
+    """Terminal logging always; with LOG_DIR set (production default: logs/), also a file
+    that rolls over at 5 MB and keeps the last 10 (attendance.log, attendance.log.1, ...)."""
     app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
+    log_dir = app.config.get("LOG_DIR")
+    if not log_dir:
+        return
+    from logging.handlers import RotatingFileHandler
+
+    os.makedirs(log_dir, exist_ok=True)
+    path = os.path.abspath(os.path.join(log_dir, "attendance.log"))
+    for name in (app.logger.name, "waitress"):
+        logger = logging.getLogger(name)
+        if any(getattr(h, "baseFilename", None) == path for h in logger.handlers):
+            continue  # already attached (the app was created twice in one process)
+        handler = RotatingFileHandler(path, maxBytes=LOG_FILE_BYTES, backupCount=LOG_FILE_COUNT, encoding="utf-8", delay=True)
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        if logger.level == logging.NOTSET or logger.level > logging.INFO:
+            logger.setLevel(logging.INFO)
 
 
 def _configure_proxy(app):

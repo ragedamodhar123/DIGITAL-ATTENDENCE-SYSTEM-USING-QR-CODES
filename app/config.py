@@ -58,6 +58,12 @@ class BaseConfig:
     RATELIMIT_LOGIN_PER_IP = "300 per 5 minutes"    # whole classroom behind one college IP
 
     TRUSTED_PROXY_COUNT = _int_env("TRUSTED_PROXY_COUNT", 0)
+
+    # Operations (Module 7, part 2)
+    LOG_DIR = os.environ.get("LOG_DIR", "")              # empty = log to the terminal only
+    BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE_DIR, "backups"))
+    BACKUP_KEEP = _int_env("BACKUP_KEEP", 14)            # newest backups kept; older ones deleted
+    PG_BIN = os.environ.get("PG_BIN", "")                # PostgreSQL bin folder, if pg_dump is not on PATH
     # Accept requests only for these host names (e.g. "attendance.college.edu"), comma
     # separated. Empty = any host (fine for development and the trycloudflare tunnel).
     # Blocks "Host header" tricks, e.g. making the QR link point to another site.
@@ -122,6 +128,9 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    LOG_DIR = os.environ.get("LOG_DIR", os.path.join(BASE_DIR, "logs"))
+    # Enough database connections for every waitress thread (WAITRESS_THREADS, default 8).
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 1800, "pool_size": 10, "max_overflow": 10}
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
     PREFERRED_URL_SCHEME = "https"
