@@ -61,9 +61,11 @@ Done
   headers, trusted host names, __Host- cookies and HSTS in production, security logging)
 - Module 7, Part 2: production setup on Windows: `serve.py` (waitress) with readiness
   checks, `flask check`, rotating log files, verified backups and restore, start/backup scripts
+- Module 7, Part 3: deployment guide (`DEPLOYMENT.md`), production `.env` template,
+  checklists for faculty, students and the admin (`docs/`), tests that keep the documents
+  in line with the app
 
-Next
-- Module 7, Part 3: deployment guide and pre-class checklist
+All planned modules are complete.
 
 
 ## Requirements
@@ -162,7 +164,7 @@ Tests (uses `attendance_test`, which is wiped on every run):
 pytest -v
 ```
 
-Expected after Module 7, Part 2: 839 passed (15 need the face models; the backup tests need
+Expected after Module 7, Part 3: 850 passed (15 need the face models; the backup tests need
 pg_dump, found on PATH, in PG_BIN, or in C:\Program Files\PostgreSQL\<version>\bin; tests
 that cannot run show as skipped).
 
@@ -201,6 +203,9 @@ attendance-system/
 ├── requirements.txt
 ├── wsgi.py               entry point for the flask command
 ├── serve.py              production server (waitress), runs the readiness checks first
+├── DEPLOYMENT.md         deployment guide
+├── .env.production.example  production settings template
+├── docs/                 admin, faculty and student checklists
 ├── scripts/
 │   ├── start_server.bat  starts serve.py (double-click or Task Scheduler)
 │   └── backup_db.bat     nightly backup + close forgotten sessions, logs to logs\backup.log
@@ -324,6 +329,7 @@ attendance-system/
     ├── test_below_threshold.py  below-threshold list (page and API), report API
     ├── test_hardening.py     security headers and policy, code scans, production settings, logging
     ├── test_ops.py           readiness, log files, backup/restore (real pg_dump), serve.py
+    └── test_docs.py          documents match the app (commands, Postman names, button texts)
     └── fixtures/face_sample.jpg  public-domain NASA portrait used by the real-model tests
 ```
 
@@ -793,6 +799,21 @@ Restore (replaces ALL current data): stop the server, then
 `flask --app wsgi restore-db backups\attendance_dev_20261115_223137.dump`. It asks you to type
 the database name to confirm. The restore runs as one transaction: if it fails, the database is
 left as it was. Start the server again afterwards.
+
+
+## Documents for running the system
+
+- `DEPLOYMENT.md`: from development to a fixed HTTPS address (named Cloudflare Tunnel, or
+  Caddy on a college server), the production `.env` (`.env.production.example`), keeping it
+  running, updating safely.
+- `docs/admin-checklist.md`: start of term (accounts, enrolment, supervised first face
+  registration, trial class), during term, end of term.
+- `docs/faculty-checklist.md`: one page for taking attendance in class.
+- `docs/student-guide.md`: one page for students (first login, face registration, scanning).
+
+`tests/test_docs.py` checks these documents against the app: every `flask` command they
+mention exists, every Postman request named in the admin checklist exists, and every button
+or message quoted in the faculty and student guides really appears in the app.
 
 
 ## Using the admin API (Postman)
