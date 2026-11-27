@@ -1,61 +1,413 @@
+{#
+  FACE REGISTRATION TEMPLATE
+
+  This page allows students to register their faces
+  before using the QR-based attendance system.
+
+  The template supports two situations:
+
+  1. Face already registered:
+     Displays a confirmation message and a link to the dashboard.
+
+  2. Face not registered:
+     Opens the camera and guides the student through
+     capturing the required number of face photos.
+
+  The template extends base.html to reuse the common
+  application layout.
+#}
 {% extends "base.html" %}
+
+{# Sets the browser tab title. #}
 {% block title %}Register your face{% endblock %}
+
+{# Main content section of the page. #}
 {% block content %}
+
+{#
+  CASE 1: FACE ALREADY REGISTERED
+
+  Checks the already_registered variable received
+  from the Flask backend.
+
+  If True, the student has already completed
+  face registration.
+
+  Therefore, there is no need to show the camera
+  and capture interface again.
+#}
 {% if already_registered %}
+
+{# Panel displaying the face registration status. #}
 <section class="panel panel-narrow">
+
+  {# Heading confirming successful face registration. #}
   <h1 class="h3 mb-2">Your face is registered</h1>
+
+  {# Explains that the student can now mark attendance. #}
   <p>You are ready to mark attendance. If your registration ever needs redoing, ask your faculty to reset it.</p>
+
+  {# Navigates the student to their dashboard. #}
   <a class="btn btn-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+
 </section>
+
+{#
+  CASE 2: FACE NOT REGISTERED
+
+  If already_registered is False, display the
+  face registration interface.
+
+  The student must capture the required number
+  of photos using the device camera.
+#}
 {% else %}
+
+{#
+  MAIN FACE ENROLLMENT CONTAINER
+
+  id="face-enroll":
+  Allows JavaScript to identify the face registration section.
+
+  The data-* attributes pass dynamic values from Flask
+  to JavaScript.
+#}
 <section class="panel panel-narrow" id="face-enroll"
+
+         {#
+           URL used to check whether the captured photo
+           contains a suitable face.
+         #}
          data-check-url="{{ url_for('face_api.check_photo') }}"
+
+         {#
+           Backend API endpoint used to submit
+           the captured photos for face registration.
+         #}
          data-enroll-url="{{ url_for('face_api.enroll') }}"
+
+         {#
+           Login URL used when authentication is required.
+
+           next=url_for('face.enroll') ensures that
+           the user can return to the face registration page
+           after logging in.
+         #}
          data-login-url="{{ url_for('auth.login', next=url_for('face.enroll')) }}"
+
+         {#
+           Number of photos required for face registration.
+
+           The value is provided dynamically by Flask
+           and accessed by JavaScript.
+         #}
          data-captures="{{ captures_needed }}">
+
+  {# Main heading of the face registration page. #}
   <h1 class="h3 mb-1">Register your face</h1>
+
+  {#
+    REGISTRATION INSTRUCTIONS
+
+    captures_needed displays the number of photos
+    the student must capture.
+
+    The message also explains how the captured photos
+    are used by the face recognition system.
+
+    According to the application's intended design,
+    the photos are not retained; a face description
+    is stored instead.
+  #}
   <p class="text-muted">We take {{ captures_needed }} photos so we can recognise you when you mark attendance.
      The photos are not kept; only a description of your face is saved.</p>
 
+
+  {#
+    NOSCRIPT WARNING
+
+    Checks whether JavaScript is disabled.
+
+    Camera access and photo capture require JavaScript.
+
+    If JavaScript is disabled, this warning is displayed
+    instead of allowing the user to attempt registration.
+  #}
   <noscript><div class="alert alert-danger">This page needs JavaScript. Turn it on in your browser settings.</div></noscript>
 
+
+  {#
+    CAMERA PREVIEW SECTION
+
+    Displays the camera interface used to capture
+    the student's face.
+
+    data-state="idle" indicates that the camera
+    has not started yet.
+  #}
   <div class="camera" data-state="idle">
+
+    {#
+      VIDEO ELEMENT
+
+      Displays the live camera stream.
+
+      playsinline:
+      Plays the video inside the webpage, particularly
+      useful on mobile devices.
+
+      muted:
+      Disables audio.
+
+      autoplay:
+      Allows the video to start automatically
+      after a camera stream is assigned.
+
+      aria-label:
+      Provides an accessible description of the video.
+    #}
     <video class="camera-video" playsinline muted autoplay aria-label="Camera preview"></video>
+
+    {#
+      CAMERA GUIDE
+
+      Displays a visual guide over the camera preview
+      to help the student position their face correctly.
+
+      aria-hidden="true" hides this decorative element
+      from screen readers.
+    #}
     <div class="camera-guide" aria-hidden="true"></div>
+
+    {#
+      CAMERA PLACEHOLDER
+
+      Displays the message "Camera is off"
+      before the camera starts.
+
+      JavaScript can update the camera interface
+      when the video stream becomes available.
+    #}
     <div class="camera-placeholder">Camera is off</div>
+
   </div>
 
+
+  {#
+    PHOTO CAPTURE PROGRESS SECTION
+
+    An ordered list is used to visually represent
+    the photos that need to be captured.
+
+    range(captures_needed) generates numbers starting
+    from 0 up to captures_needed - 1.
+
+    For every iteration, one list item is created.
+
+    Example:
+    If captures_needed = 3,
+    three capture-step elements are generated.
+  #}
   <ol class="capture-steps" aria-label="Photos taken">
+
+    {#
+      Loops through the number of required captures.
+
+      i represents the current photo index.
+
+      data-step="{{ i }}" allows JavaScript to identify
+      and update the corresponding capture step.
+
+      i + 1 is displayed to the screen reader because
+      photo numbering should start from 1 instead of 0.
+    #}
     {% for i in range(captures_needed) %}
-      <li class="capture-step" data-step="{{ i }}"><span class="visually-hidden">Photo {{ i + 1 }}</span></li>
+
+      {# Individual photo capture progress indicator. #}
+      <li class="capture-step" data-step="{{ i }}">
+
+        {#
+          Provides an accessible description
+          for screen readers.
+
+          Example:
+          Photo 1, Photo 2, Photo 3.
+        #}
+        <span class="visually-hidden">Photo {{ i + 1 }}</span>
+
+      </li>
     {% endfor %}
+
   </ol>
 
+
+  {#
+    CAPTURE INSTRUCTIONS
+
+    Displays instructions to the student.
+
+    aria-live="polite" allows screen readers to announce
+    updates without interrupting the current announcement.
+
+    JavaScript can change this message during registration
+    to guide the student through the capture process.
+  #}
   <p class="capture-prompt" aria-live="polite">Press "Start camera". Hold your phone at eye level in good light.</p>
+
+
+  {#
+    ERROR MESSAGE CONTAINER
+
+    Initially hidden using d-none.
+
+    JavaScript displays this element when an error occurs.
+
+    Examples:
+    - Camera permission denied.
+    - No face detected.
+    - Invalid photo.
+    - Camera unavailable.
+
+    role="alert" announces important errors
+    to screen readers.
+  #}
   <div class="alert alert-danger capture-error d-none" role="alert"></div>
 
+
+  {#
+    CAMERA ACTION BUTTONS
+
+    d-grid arranges the buttons vertically.
+    gap-2 adds spacing between them.
+  #}
   <div class="d-grid gap-2">
+
+    {#
+      START CAMERA BUTTON
+
+      Initially visible.
+
+      When clicked, JavaScript requests permission
+      to access the device camera and starts the preview.
+    #}
     <button type="button" class="btn btn-primary btn-lg" data-action="start">Start camera</button>
+
+    {#
+      TAKE PHOTO BUTTON
+
+      Initially hidden using d-none.
+
+      JavaScript displays this button after the camera
+      has started successfully.
+
+      Clicking it captures a photo for registration.
+    #}
     <button type="button" class="btn btn-primary btn-lg d-none" data-action="capture">Take photo</button>
+
   </div>
 
+
+  {#
+    CAMERA TROUBLESHOOTING SECTION
+
+    The details element creates an expandable section.
+
+    It remains collapsed initially.
+
+    The student can click the summary text
+    to view camera troubleshooting instructions.
+  #}
   <details class="mt-4 small">
+
+    {# Heading displayed for the expandable section. #}
     <summary>Camera not working?</summary>
+
+    {# List of common camera troubleshooting steps. #}
     <ul class="mt-2 mb-0">
+
+      {#
+        STEP 1:
+        Allow camera access when the browser
+        requests camera permission.
+      #}
       <li>When the browser asks, choose <strong>Allow</strong> for the camera.</li>
+
+      {#
+        STEP 2:
+        If camera access was previously blocked,
+        open the browser's site permissions,
+        allow camera access and reload the page.
+      #}
       <li>If you pressed Block earlier: tap the lock icon next to the address, open Permissions, and allow Camera. Then reload.</li>
+
+      {#
+        STEP 3:
+        Close other applications that might already
+        be using the device camera.
+      #}
       <li>Close other apps that might be using the camera (video calls, camera app).</li>
+
+      {#
+        STEP 4:
+        Recommends supported mobile browsers
+        for accessing the camera.
+      #}
       <li>Use Chrome on Android or Safari on iPhone.</li>
+
     </ul>
   </details>
+
 </section>
+
+{# Ends the face registration interface. #}
 {% endif %}
+
+{# Ends the main content block. #}
 {% endblock %}
 
+
+{#
+  JAVASCRIPT FILE LOADING SECTION
+
+  These scripts are required for camera access,
+  photo capture, API communication and face registration.
+
+  Scripts are loaded only when the student's face
+  has not already been registered.
+
+  If already_registered is True, these scripts
+  are unnecessary and are not loaded.
+#}
 {% block scripts %}
+
+{# Checks whether face registration is still required. #}
 {% if not already_registered %}
+
+  {#
+    api.js
+
+    Handles communication between the frontend
+    and Flask backend APIs.
+  #}
   <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+
+  {#
+    camera.js
+
+    Handles camera operations, including accessing
+    the device camera and displaying the live video stream.
+  #}
   <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+
+  {#
+    face-enroll.js
+
+    Controls the face registration process.
+
+    It coordinates the camera, photo capture,
+    progress indicators, API requests and registration results.
+  #}
   <script src="{{ url_for('static', filename='js/face-enroll.js') }}" defer></script>
+
 {% endif %}
 {% endblock %}
