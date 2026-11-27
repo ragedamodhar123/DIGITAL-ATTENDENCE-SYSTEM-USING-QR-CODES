@@ -1,53 +1,438 @@
+{#
+  STUDENT COURSE ATTENDANCE DETAILS TEMPLATE
+
+  This page displays the attendance details of a student
+  for a particular course.
+
+  It contains two main sections:
+
+  1. Course attendance summary:
+     Displays attendance percentage, present count,
+     absent count and attendance warning.
+
+  2. Class history:
+     Displays individual class dates, times,
+     attendance status and attendance recording method.
+
+  The template extends base.html to reuse the common
+  application layout.
+#}
 {% extends "base.html" %}
+
+
+{#
+  ATTENDANCE METHOD DICTIONARY
+
+  Maps the attendance recording method stored
+  in the database to a user-friendly description.
+
+  qr_face:
+    Attendance marked through QR code and face verification.
+
+  manual:
+    Attendance marked or corrected manually by faculty.
+
+  auto_absent:
+    Student did not check in, so the system recorded
+    the student as absent.
+
+  The dictionary is used later to display
+  how the attendance was recorded.
+#}
 {% set how = {"qr_face": "face check", "manual": "marked by faculty", "auto_absent": "did not check in"} %}
+
+
+{#
+  PAGE TITLE
+
+  Displays the course code dynamically
+  as the browser tab title.
+#}
 {% block title %}{{ summary.course.code }}{% endblock %}
+
+
+{# Main content section. #}
 {% block content %}
+
+
+{#
+  BACK NAVIGATION
+
+  Provides a link to return to the student's
+  main attendance dashboard.
+
+  url_for() generates the URL for the student.dashboard route.
+#}
 <p class="mb-2"><a href="{{ url_for('student.dashboard') }}">Your attendance</a></p>
 
+
+{#
+  SECTION 1: COURSE ATTENDANCE SUMMARY
+
+  Displays the overall attendance information
+  for the selected course.
+#}
 <section class="panel">
+
+  {#
+    COURSE HEADING
+
+    summary.course.code:
+      Displays the course code.
+
+    summary.course.name:
+      Displays the course name.
+
+    Both values are dynamically obtained
+    from the backend.
+  #}
   <h1 class="h4 mb-1">{{ summary.course.code }} {{ summary.course.name }}</h1>
+
+
+  {#
+    COURSE TERM INFORMATION
+
+    Displays the academic term associated with the course.
+
+    summary.enrolled checks whether the student
+    is currently enrolled in this course.
+
+    If the student is no longer enrolled,
+    the message ", no longer enrolled" is displayed.
+  #}
   <p class="text-muted mb-3">{{ summary.course.term }}{% if not summary.enrolled %}, no longer enrolled{% endif %}</p>
+
+
+  {#
+    CHECK WHETHER ATTENDANCE PERCENTAGE EXISTS
+
+    summary.percent contains the student's
+    attendance percentage.
+
+    If it is None, no finished classes are available
+    for calculating attendance.
+
+    Therefore, the page displays an informational message.
+  #}
   {% if summary.percent is none %}
+
+    {# Message displayed when there are no completed classes. #}
     <p class="mb-0">No finished classes yet.</p>
+
+
+  {#
+    DISPLAY ATTENDANCE SUMMARY
+
+    If summary.percent is not None,
+    attendance statistics are displayed.
+  #}
   {% else %}
+
+    {#
+      ATTENDANCE STATISTICS CONTAINER
+
+      live-counts is a CSS class used to arrange
+      the attendance statistics.
+    #}
     <div class="live-counts">
-      <div><span class="count{% if summary.below_threshold %} count-bad{% endif %}">{{ summary.percent }}%</span><span class="count-label">attendance</span></div>
-      <div><span class="count">{{ summary.present }}</span><span class="count-label">present</span></div>
-      <div><span class="count">{{ summary.absent }}</span><span class="count-label">absent</span></div>
+
+      {#
+        ATTENDANCE PERCENTAGE
+
+        summary.percent displays the calculated
+        attendance percentage.
+
+        Conditional CSS class:
+
+        If summary.below_threshold is True,
+        count-bad is added to highlight low attendance.
+
+        Otherwise, only the count class is applied.
+      #}
+      <div>
+        <span class="count{% if summary.below_threshold %} count-bad{% endif %}">{{ summary.percent }}%</span>
+
+        {# Label describing the displayed percentage. #}
+        <span class="count-label">attendance</span>
+      </div>
+
+
+      {#
+        PRESENT COUNT
+
+        summary.present contains the total number
+        of classes in which the student was present.
+      #}
+      <div>
+        <span class="count">{{ summary.present }}</span>
+        <span class="count-label">present</span>
+      </div>
+
+
+      {#
+        ABSENT COUNT
+
+        summary.absent contains the total number
+        of classes in which the student was absent.
+      #}
+      <div>
+        <span class="count">{{ summary.absent }}</span>
+        <span class="count-label">absent</span>
+      </div>
+
     </div>
+
+
+    {#
+      LOW ATTENDANCE WARNING
+
+      Checks whether the student's attendance
+      is below the required attendance threshold.
+
+      If True, displays a warning message.
+
+      threshold is dynamically provided by Flask.
+
+      alert-warning is a Bootstrap class
+      used to display a warning-style message.
+    #}
     {% if summary.below_threshold %}
+
       <div class="alert alert-warning mt-3 mb-0">Your attendance is below {{ threshold }}%.</div>
+
     {% endif %}
+
   {% endif %}
+
 </section>
 
+
+{#
+  SECTION 2: CLASS HISTORY
+
+  Displays the attendance details of individual
+  classes conducted for the selected course.
+#}
 <section class="panel">
+
+  {# Heading of the class history section. #}
   <h2 class="h5 mb-3">Classes</h2>
+
+
+  {#
+    CHECK WHETHER CLASS HISTORY EXISTS
+
+    history contains the list of class sessions
+    and their corresponding attendance records.
+
+    If history contains data, the class details
+    are displayed using a loop.
+  #}
   {% if history %}
+
+    {#
+      CLASS HISTORY LIST
+
+      class-list is a CSS class used to style
+      the list of individual class sessions.
+    #}
     <ul class="class-list">
+
+      {#
+        LOOP THROUGH CLASS HISTORY
+
+        history contains pairs of values:
+
+        session:
+          Contains information about the class session,
+          such as date, start time and session status.
+
+        record:
+          Contains the student's attendance record
+          for that particular session.
+
+        If record is None, no attendance record
+        exists for that session.
+      #}
       {% for session, record in history %}
+
+        {# Each list item represents one class session. #}
         <li>
+
+          {#
+            LEFT SIDE: CLASS DATE AND TIME
+
+            Displays the date and starting time
+            of the class session.
+          #}
           <span>
+
+            {#
+              CLASS DATE
+
+              session.session_date contains the date
+              of the class.
+
+              strftime() formats the date.
+
+              %a = Abbreviated weekday name.
+              %d = Day of the month.
+              %b = Abbreviated month name.
+              %Y = Four-digit year.
+
+              Example:
+              Fri 27 Nov 2026
+            #}
             <span class="fw-semibold">{{ session.session_date.strftime("%a %d %b %Y") }}</span>
+
+            {#
+              CLASS START TIME
+
+              session.started_at contains the starting
+              timestamp of the class.
+
+              localtime is a custom Jinja filter
+              that converts the timestamp into local time.
+            #}
             <span class="text-muted small">{{ session.started_at | localtime }}</span>
+
           </span>
+
+
+          {#
+            RIGHT SIDE: ATTENDANCE STATUS
+
+            Displays whether the student is present,
+            absent or has not checked in.
+          #}
           <span class="text-end">
+
+
+            {#
+              CASE 1: NO ATTENDANCE RECORD
+
+              Checks whether record is None.
+
+              This means there is no attendance record
+              for the student in this session.
+
+              The message indicates that the class
+              is currently running and the student
+              has not checked in.
+            #}
             {% if record is none %}
+
               <span class="status">running now, not checked in</span>
+
+
+            {#
+              CASE 2: STUDENT PRESENT
+
+              Checks whether the attendance record
+              has status equal to "present".
+
+              If True, displays Present with the
+              status-ok CSS class.
+
+              status-ok is used to visually distinguish
+              successful attendance.
+            #}
             {% elif record.status == "present" %}
+
               <span class="status status-ok">Present</span>
+
+
+            {#
+              CASE 3: STUDENT ABSENT
+
+              If the record exists but its status
+              is not "present", the page displays Absent.
+
+              status-bad is used to visually highlight
+              the absent status.
+            #}
             {% else %}
+
               <span class="status status-bad">Absent</span>
+
             {% endif %}
+
+
+            {#
+              ATTENDANCE RECORDING METHOD
+
+              Checks whether an attendance record exists.
+
+              If record exists, its method is looked up
+              in the how dictionary.
+
+              Examples:
+              qr_face     -> face check
+              manual      -> marked by faculty
+              auto_absent -> did not check in
+
+              d-block displays the method on a separate line.
+            #}
             {% if record %}<span class="d-block small text-muted">{{ how[record.method] }}</span>{% endif %}
-            {% if session.status == "open" and record %}<span class="d-block small text-muted">class still running</span>{% endif %}
+
+
+            {#
+              OPEN SESSION INFORMATION
+
+              Checks two conditions:
+
+              1. session.status == "open":
+                 The class session is still running.
+
+              2. record exists:
+                 An attendance record is available.
+
+              If both conditions are True,
+              displays a message indicating that
+              the class is still running.
+            #}
+            {% if session.status == "open" and record %}
+
+              <span class="d-block small text-muted">class still running</span>
+
+            {% endif %}
+
           </span>
+
         </li>
+
+      {# Ends the loop through class history. #}
       {% endfor %}
+
     </ul>
+
+
+  {#
+    NO CLASS HISTORY
+
+    If history is empty, no class sessions
+    are available to display.
+  #}
   {% else %}
+
+    {# Displays a message when no classes exist. #}
     <p class="mb-0">No classes yet.</p>
+
   {% endif %}
+
+
+  {#
+    ATTENDANCE CORRECTION INFORMATION
+
+    Displays instructions for students who believe
+    their attendance has been recorded incorrectly.
+
+    Faculty members can review and correct
+    attendance records when necessary.
+  #}
   <p class="small text-muted mt-3 mb-0">Think a class is recorded wrongly? Talk to your faculty; they can correct it.</p>
+
 </section>
+
+{# Ends the main content block. #}
 {% endblock %}
