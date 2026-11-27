@@ -1,43 +1,288 @@
+{#
+  LOGIN PAGE TEMPLATE
+
+  This template provides the login interface for students and faculty.
+
+  Users log in using:
+  1. Their college roll number (students).
+  2. Their staff ID (faculty).
+
+  The template extends base.html to reuse the common
+  navigation, CSS, layout and other shared elements.
+#}
 {% extends "base.html" %}
+
+{# Sets the browser tab title to Log in. #}
 {% block title %}Log in{% endblock %}
+
+{# Main content section of the login page. #}
 {% block content %}
+
+{# Main login panel. panel-narrow keeps the form width limited. #}
 <section class="panel panel-narrow">
+
+  {# Main heading of the login page. #}
   <h1 class="h3 mb-1">Log in</h1>
+
+  {# Instructions explaining which login ID the user should enter. #}
   <p class="text-muted mb-4">Use the roll number or staff ID your college gave you.</p>
 
+
+  {#
+    NEXT URL MESSAGE
+
+    Checks whether next_url contains a destination URL.
+
+    This usually happens when an unauthenticated user
+    tries to access a protected page.
+
+    The application redirects the user to the login page.
+    After successful authentication, the user can be
+    redirected to the originally requested page.
+
+    Example:
+    A student tries to open the attendance dashboard
+    without logging in.
+  #}
   {% if next_url %}
+
+    {# Displays an informational message to the user. #}
     <div class="alert alert-info">Log in to continue.</div>
-  {% endif %}
-  {% if error %}
-    <div class="alert alert-danger" role="alert">{{ error }}</div>
+
   {% endif %}
 
+
+  {#
+    LOGIN ERROR MESSAGE
+
+    Checks whether the Flask backend has provided an error.
+
+    Examples:
+    - Incorrect username or password.
+    - Missing login credentials.
+    - Invalid login attempt.
+
+    If an error exists, it is displayed to the user.
+  #}
+  {% if error %}
+
+    {#
+      alert-danger displays the message in an error style.
+
+      role="alert" makes the message accessible
+      to screen readers.
+    #}
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
+
+  {% endif %}
+
+
+  {#
+    LOGIN FORM
+
+    method="post":
+    Sends the login information to the backend using HTTP POST.
+
+    action:
+    Submits the form to the Flask auth.login route.
+
+    novalidate:
+    Disables the browser's default validation.
+    This allows the application to handle validation
+    and display its own error messages.
+  #}
   <form method="post" action="{{ url_for('auth.login') }}" novalidate>
+
+    {#
+      CSRF SECURITY TOKEN
+
+      A hidden field containing a CSRF token.
+
+      csrf_token() generates the token used to protect
+      the login form against Cross-Site Request Forgery attacks.
+
+      The user does not see this field.
+    #}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {#
+      NEXT URL HIDDEN FIELD
+
+      Stores the destination URL in the form.
+
+      After successful login, the backend can use this
+      value to redirect the user to the requested page.
+
+      Keeping it hidden prevents it from appearing
+      as a visible input field.
+    #}
     <input type="hidden" name="next" value="{{ next_url }}">
 
+
+    {#
+      USERNAME INPUT SECTION
+
+      This field accepts either:
+      - Student roll number.
+      - Faculty staff ID.
+    #}
     <div class="mb-3">
+
+      {#
+        LABEL
+
+        Connects the text label to the username input
+        through for="username".
+      #}
       <label for="username" class="form-label">Roll number or staff ID</label>
+
+      {#
+        USERNAME INPUT FIELD
+
+        id="username":
+        Identifies the input element.
+
+        name="username":
+        Defines the field name sent to Flask.
+
+        type="text":
+        Allows the user to enter a roll number or staff ID.
+
+        class:
+        Applies Bootstrap styling.
+
+        value="{{ username }}":
+        Displays the previously entered username.
+
+        autocomplete="username":
+        Allows the browser to suggest saved usernames.
+
+        autocapitalize="none":
+        Prevents automatic capitalization on mobile devices.
+
+        spellcheck="false":
+        Disables spelling suggestions for IDs.
+
+        maxlength="64":
+        Restricts the maximum input length to 64 characters.
+
+        required:
+        Makes the field mandatory.
+
+        autofocus:
+        Automatically places the cursor in this field
+        when the page loads.
+      #}
       <input id="username" name="username" type="text" class="form-control form-control-lg"
              value="{{ username }}" autocomplete="username" autocapitalize="none"
              spellcheck="false" maxlength="64" required autofocus>
     </div>
 
+
+    {#
+      PASSWORD INPUT SECTION
+
+      Allows the student or faculty member
+      to enter their account password.
+    #}
     <div class="mb-3">
+
+      {# Label connected to the password input. #}
       <label for="password" class="form-label">Password</label>
+
+      {#
+        PASSWORD INPUT FIELD
+
+        type="password":
+        Hides the entered password characters.
+
+        name="password":
+        Identifies the password value sent to Flask.
+
+        autocomplete="current-password":
+        Allows the browser to suggest the saved password.
+
+        maxlength="128":
+        Restricts the password length to 128 characters.
+
+        required:
+        Makes the password field mandatory.
+      #}
       <input id="password" name="password" type="password" class="form-control form-control-lg"
              autocomplete="current-password" maxlength="128" required>
     </div>
 
+
+    {#
+      REMEMBER ME SECTION
+
+      Provides an option to keep the user logged in
+      for a longer period.
+
+      The option is useful for personal devices.
+
+      Users are advised not to enable it on shared
+      computers or college laboratory systems.
+    #}
     <div class="form-check mb-4">
+
+      {#
+        REMEMBER CHECKBOX
+
+        type="checkbox":
+        Creates a checkbox.
+
+        id="remember":
+        Identifies the checkbox.
+
+        name="remember":
+        Sends the checkbox value to the Flask backend.
+
+        If checked, the backend can use this value
+        to create a persistent login session.
+      #}
       <input id="remember" name="remember" type="checkbox" class="form-check-input">
+
+      {# Label associated with the remember-me checkbox. #}
       <label for="remember" class="form-check-label">Keep me logged in on this phone</label>
+
+      {# Security advice for users accessing shared computers. #}
       <div class="form-text">Leave this off on shared or lab computers.</div>
     </div>
 
+
+    {#
+      LOGIN SUBMIT BUTTON
+
+      type="submit":
+      Submits the login form to the Flask backend.
+
+      The backend receives the username, password,
+      CSRF token, next URL and remember-me option.
+
+      The backend then verifies the credentials
+      and handles authentication.
+    #}
     <button type="submit" class="btn btn-primary btn-lg w-100">Log in</button>
+
   </form>
 
+
+  {#
+    FORGOT PASSWORD INFORMATION
+
+    Displays instructions for users who have forgotten
+    their passwords.
+
+    In this application, users must contact faculty
+    or the administrator to receive a new password.
+
+    This is an informational message, not a password
+    recovery form or automated reset link.
+  #}
   <p class="small text-muted mt-4 mb-0">Forgot your password? Ask your faculty or the admin to issue a new one.</p>
+
 </section>
+
+{# Ends the main content block. #}
 {% endblock %}
