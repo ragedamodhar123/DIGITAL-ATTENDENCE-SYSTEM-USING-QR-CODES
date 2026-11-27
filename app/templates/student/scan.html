@@ -1,22 +1,95 @@
+{# 
+  Inherits the common layout from base.html.
+  This reuses the navigation bar, CSS and common page structure.
+#}
 {% extends "base.html" %}
+
+{# Sets the browser tab title. #}
 {% block title %}Scan attendance code{% endblock %}
+
+{# Starts the main page content. #}
 {% block content %}
+
+{# Main QR scanning panel.
+   panel-narrow limits the panel width.
+   id="qr-scan" identifies this section for JavaScript.
+   data-scan-path provides the URL path used by the scanner
+   when processing a scanned attendance code. #}
 <section class="panel panel-narrow" id="qr-scan" data-scan-path="/a/">
+
+  {# Heading of the QR scanning page. #}
   <h1 class="h3 mb-1">Scan attendance code</h1>
-  <p class="text-muted">Point your back camera at the code on your faculty's screen.</p>
 
-  <noscript><div class="alert alert-danger">This page needs JavaScript. You can also scan the code with your phone's camera app.</div></noscript>
+  {# Instructions for the student to use the phone's back camera
+     to scan the QR code displayed on the faculty's screen. #}
+  <p class="text-muted">
+    Point your back camera at the code on your faculty's screen.
+  </p>
 
+  {# Displays this warning if JavaScript is disabled in the browser.
+     The student can alternatively use the phone's camera application
+     to scan the QR code. #}
+  <noscript>
+    <div class="alert alert-danger">
+      This page needs JavaScript. You can also scan the code with your phone's camera app.
+    </div>
+  </noscript>
+
+  {# Container where the QR scanner camera preview is displayed.
+     The JavaScript scanner library uses this element to show the camera
+     feed and detect QR codes.
+     aria-label provides an accessible description. #}
   <div id="qr-reader" class="qr-reader" aria-label="Camera preview"></div>
-  <p class="scan-status text-center" aria-live="polite">Press "Start scanning".</p>
+
+  {# Displays the current scanning status.
+     aria-live="polite" allows screen readers to announce status changes
+     without interrupting the user. #}
+  <p class="scan-status text-center" aria-live="polite">
+    Press "Start scanning".
+  </p>
+
+  {# Error message container.
+     alert-danger gives it an error appearance.
+     d-none initially hides the error message.
+     JavaScript can display this element when a scanning error occurs.
+     role="alert" makes the error accessible to screen readers. #}
   <div class="alert alert-danger scan-error d-none" role="alert"></div>
 
-  <button type="button" class="btn btn-primary btn-lg w-100" data-action="start">Start scanning</button>
+  {# Button used to start the QR code scanner.
+     data-action="start" allows JavaScript to identify this button
+     and attach the scanning functionality to it. #}
+  <button type="button" class="btn btn-primary btn-lg w-100" data-action="start">
+    Start scanning
+  </button>
 
-  <p class="small text-muted mt-3 mb-0">Scanner not working? Open your phone's camera app and point it at the code; tap the link it shows.</p>
+  {# Alternative instructions in case the website scanner does not work.
+     The student can use the phone's built-in camera app instead. #}
+  <p class="small text-muted mt-3 mb-0">
+    Scanner not working? Open your phone's camera app and point it at the code; tap the link it shows.
+  </p>
+
 </section>
+
+{# Ends the main content block. #}
 {% endblock %}
+
+
+{# --------------------------------------------------
+   JAVASCRIPT FILES
+   These scripts provide the QR scanning functionality.
+   -------------------------------------------------- #}
 {% block scripts %}
+
+  {# Loads the html5-qrcode library.
+     This third-party JavaScript library accesses the camera
+     and detects QR codes from the camera feed.
+     defer ensures the script executes after HTML parsing. #}
   <script src="{{ url_for('static', filename='vendor/html5-qrcode/html5-qrcode.min.js') }}" defer></script>
+
+  {# Loads the application's custom JavaScript file.
+     student-scan.js controls the scanning process,
+     handles the Start scanning button and processes detected QR codes. #}
   <script src="{{ url_for('static', filename='js/student-scan.js') }}" defer></script>
+
+{# Ends the scripts block. #}
 {% endblock %}
