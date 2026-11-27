@@ -1,43 +1,161 @@
+{# Declares that this document uses HTML5. #}
 <!doctype html>
+
+{# Root HTML element.
+   lang="en" specifies that the page language is English. #}
 <html lang="en">
+
 <head>
+
+  {# Defines the character encoding as UTF-8.
+     Supports English and other Unicode characters. #}
   <meta charset="utf-8">
+
+  {# Makes the website responsive.
+     The page width adjusts according to the device screen width.
+     Initial zoom level is set to 100%. #}
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {# Generates a CSRF token and stores it in a meta tag.
+     JavaScript can read this token when making protected requests. #}
   <meta name="csrf-token" content="{{ csrf_token() }}">
+
+  {# Defines the browser tab title.
+     Child templates can replace the title using the title block.
+     Attendance is the default title if no title is provided. #}
   <title>{% block title %}Attendance{% endblock %} – Attendance</title>
+
+  {# Loads the Bootstrap CSS file.
+     Bootstrap provides ready-made styles for buttons, forms,
+     alerts, spacing and responsive layouts. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+
+  {# Loads the application's custom CSS file.
+     Used for the project's own colors, layouts and components. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+
 </head>
+
 <body>
+
+  {# --------------------------------------------------
+     HEADER / NAVIGATION BAR
+     Displays the application name and logged-in user's details.
+     -------------------------------------------------- #}
   <header class="app-bar">
+
+    {# Bootstrap container for alignment and responsive spacing. #}
     <div class="container app-bar-inner">
-      <a class="app-name" href="{{ url_for('main.home') if current_user.is_authenticated else url_for('auth.login') }}">Attendance</a>
+
+      {# Application name acts as a home link.
+         If the user is logged in, it redirects to main.home.
+         Otherwise, it redirects to the login page. #}
+      <a class="app-name"
+         href="{{ url_for('main.home') if current_user.is_authenticated else url_for('auth.login') }}">
+        Attendance
+      </a>
+
+      {# Checks whether a user is currently logged in.
+         User details and the logout button are displayed only
+         for authenticated users. #}
       {% if current_user.is_authenticated %}
+
         <div class="app-user">
+
+          {# Displays the full name of the logged-in user. #}
           <span class="app-user-name">{{ current_user.full_name }}</span>
-          <form method="post" action="{{ url_for('auth.logout') }}" class="d-inline">
+
+          {# Logout form.
+             Sends a POST request to the auth.logout Flask route.
+             A form is used instead of a simple link because logout
+             changes the user's authentication state. #}
+          <form method="post"
+                action="{{ url_for('auth.logout') }}"
+                class="d-inline">
+
+            {# Hidden CSRF token protects the logout form
+               against Cross-Site Request Forgery attacks. #}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-outline-light">Log out</button>
+
+            {# Submits the logout form when clicked. #}
+            <button type="submit" class="btn btn-sm btn-outline-light">
+              Log out
+            </button>
+
           </form>
+
         </div>
+
       {% endif %}
+
     </div>
   </header>
 
+
+  {# --------------------------------------------------
+     MAIN CONTENT AREA
+     Displays flash messages and the content of child templates.
+     -------------------------------------------------- #}
   <main class="container app-main">
+
+    {# Retrieves flash messages stored by Flask.
+       with_categories=true also retrieves the category of each message.
+       Examples: success, error, warning and info. #}
     {% with messages = get_flashed_messages(with_categories=true) %}
+
+      {# Loops through all available flash messages. #}
       {% for category, message in messages %}
-        <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="status">{{ message }}</div>
+
+        {# Displays each message using a Bootstrap alert.
+           If the category is "error", it is converted to "danger"
+           because Bootstrap uses alert-danger for error messages.
+           Other categories are used directly. #}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }}"
+             role="status">
+          {{ message }}
+        </div>
+
       {% endfor %}
+
     {% endwith %}
+
+    {# Content block.
+       Child templates insert their page-specific content here.
+       Examples: login form, student dashboard and QR scanner. #}
     {% block content %}{% endblock %}
+
   </main>
 
+
+  {# --------------------------------------------------
+     COMMON JAVASCRIPT FILES
+     These scripts provide functionality shared across pages.
+     -------------------------------------------------- #}
+
+  {# Loads Bootstrap JavaScript components such as dropdowns
+     and other interactive Bootstrap elements.
+     defer delays execution until HTML parsing is complete. #}
   <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}" defer></script>
+
+  {# Loads additional scripts only when the user is logged in. #}
   {% if current_user.is_authenticated %}
+
+    {# Checks whether the page is still fresh/current.
+       Used to help handle stale pages after navigation or logout.
+       This script is loaded without defer. #}
     <script src="{{ url_for('static', filename='js/page-freshness.js') }}"></script>
+
+    {# Loads the script responsible for confirmation
+       before submitting certain forms. #}
     <script src="{{ url_for('static', filename='js/confirm-forms.js') }}" defer></script>
+
   {% endif %}
+
+  {# Scripts block.
+     Child templates can insert their own JavaScript files here.
+     For example, the QR scanning page loads html5-qrcode
+     and student-scan.js through this block. #}
   {% block scripts %}{% endblock %}
+
 </body>
 </html>
