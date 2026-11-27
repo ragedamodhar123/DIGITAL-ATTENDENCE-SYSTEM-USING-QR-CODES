@@ -1,134 +1,449 @@
+{#
+  This page displays the details of a particular course assigned
+  to the faculty member.
+
+  Faculty can:
+  1. View enrolled students.
+  2. Start a new attendance session.
+  3. Open an existing active attendance session.
+  4. View previous attendance sessions.
+  5. Record attendance for another date.
+  6. Download attendance reports in Excel or CSV format.
+  7. Identify students with low attendance.
+  8. Manage student passwords and face registration.
+#}
+
 {% extends "base.html" %}
+
 {% block title %}{{ course.code }}{% endblock %}
+
 {% block content %}
-<p class="mb-2"><a href="{{ url_for('faculty.dashboard') }}">Your courses</a></p>
 
+{# Navigation link to return to the faculty dashboard. #}
+<p class="mb-2">
+  <a href="{{ url_for('faculty.dashboard') }}">
+    Your courses
+  </a>
+</p>
+
+{# Course information section. #}
 <section class="panel">
-  <h1 class="h3 mb-1">{{ course.code }} {{ course.name }}</h1>
-  <p class="text-muted mb-0">{{ course.term }}, {{ entries | length }} student{{ '' if entries | length == 1 else 's' }}</p>
+
+  <h1 class="h3 mb-1">
+    {{ course.code }} {{ course.name }}
+  </h1>
+
+  {# Display academic term and total enrolled students. #}
+  <p class="text-muted mb-0">
+    {{ course.term }},
+    {{ entries | length }}
+    student{{ '' if entries | length == 1 else 's' }}
+  </p>
+
 </section>
 
+{# Attendance can be started only when the course is active
+   and at least one student is enrolled. #}
 {% if course.is_active and entries %}
+
 <section class="panel">
+
+  {# Check whether an attendance session is already running. #}
   {% if open_session %}
-    <p class="mb-2"><strong>Attendance is running</strong> for this course.</p>
-    <a class="btn btn-primary btn-lg w-100" href="{{ url_for('faculty.session', session_id=open_session.id) }}">Open attendance screen</a>
+
+    <p class="mb-2">
+      <strong>Attendance is running</strong> for this course.
+    </p>
+
+    {# If a session is already open, provide a link to that session
+       instead of allowing another session to be started. #}
+    <a class="btn btn-primary btn-lg w-100"
+       href="{{ url_for(
+         'faculty.session',
+         session_id=open_session.id
+       ) }}">
+      Open attendance screen
+    </a>
+
   {% else %}
-    <form method="post" action="{{ url_for('faculty.start_attendance', course_id=course.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary btn-lg w-100">Start attendance</button>
+
+    {# Start a new QR-based attendance session.
+       This POST request is handled by the Flask backend. #}
+    <form method="post"
+          action="{{ url_for(
+            'faculty.start_attendance',
+            course_id=course.id
+          ) }}">
+
+      <input type="hidden"
+             name="csrf_token"
+             value="{{ csrf_token() }}">
+
+      <button type="submit"
+              class="btn btn-primary btn-lg w-100">
+        Start attendance
+      </button>
+
     </form>
+
   {% endif %}
+
 </section>
+
 {% endif %}
 
+{# Attendance history section displays previous sessions. #}
 <section class="panel">
+
   <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+
     <h2 class="h5 mb-0">Attendance</h2>
+
+    {# Allow faculty to enter attendance for a previous date
+       or a class conducted without the QR attendance system. #}
     {% if course.is_active and entries %}
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('faculty.other_date', course_id=course.id) }}">Record another date</a>
+
+      <a class="btn btn-sm btn-outline-primary"
+         href="{{ url_for(
+           'faculty.other_date',
+           course_id=course.id
+         ) }}">
+        Record another date
+      </a>
+
     {% endif %}
+
   </div>
+
   {% if sessions %}
+
     <ul class="session-list">
+
+      {# Loop through all attendance sessions of this course.
+         Each tuple contains the session, present count and absent count. #}
       {% for s, present, absent in sessions %}
+
         <li>
-          <a href="{{ url_for('faculty.session', session_id=s.id) }}">
-            <span class="fw-semibold">{{ s.session_date.strftime("%a %d %b %Y") }}</span>
-            <span class="text-muted small">{{ s.started_at | localtime }}{% if s.kind == "manual" %}, recorded by hand{% endif %}</span>
+
+          {# Open the selected attendance session to view its details. #}
+          <a href="{{ url_for(
+            'faculty.session',
+            session_id=s.id
+          ) }}">
+
+            <span class="fw-semibold">
+              {{ s.session_date.strftime("%a %d %b %Y") }}
+            </span>
+
+            {# Display the session starting time and indicate
+               whether the attendance was recorded manually. #}
+            <span class="text-muted small">
+              {{ s.started_at | localtime }}
+
+              {% if s.kind == "manual" %}
+                , recorded by hand
+              {% endif %}
+            </span>
+
           </a>
+
           <span class="small">
-            {% if s.status == "open" %}<span class="status status-ok">running now</span>
-            {% else %}{{ present }} present, {{ absent }} absent{% endif %}
+
+            {# An open session displays its running status.
+               A completed session displays present and absent counts. #}
+            {% if s.status == "open" %}
+
+              <span class="status status-ok">
+                running now
+              </span>
+
+            {% else %}
+
+              {{ present }} present, {{ absent }} absent
+
+            {% endif %}
+
           </span>
+
         </li>
+
       {% endfor %}
+
     </ul>
+
   {% else %}
-    <p class="mb-0 text-muted">No attendance taken yet.</p>
+
+    <p class="mb-0 text-muted">
+      No attendance taken yet.
+    </p>
+
   {% endif %}
+
 </section>
 
-
-
+{# Report section is displayed when at least one attendance
+   session exists for the course. #}
 {% if sessions %}
+
 <section class="panel" id="report">
+
   <h2 class="h5 mb-1">Download report</h2>
-  <p class="text-muted small mb-3">Every student against every finished class (P / A), with totals and percentages.
-     Leave the dates empty for all classes.</p>
-  <form method="get" action="{{ url_for('faculty.course_report', course_id=course.id) }}">
+
+  <p class="text-muted small mb-3">
+
+    Every student against every finished class (P / A),
+    with totals and percentages.
+
+    Leave the dates empty for all classes.
+
+  </p>
+
+  {# Report form sends the selected date range and output format
+     to the course_report Flask route. #}
+  <form method="get"
+        action="{{ url_for(
+          'faculty.course_report',
+          course_id=course.id
+        ) }}">
+
     <div class="row g-2 mb-2">
+
       <div class="col-6">
-        <label class="form-label small" for="report-from">From</label>
-        <input id="report-from" name="from" type="date" class="form-control">
+
+        <label class="form-label small" for="report-from">
+          From
+        </label>
+
+        {# Starting date for filtering attendance records. #}
+        <input id="report-from"
+               name="from"
+               type="date"
+               class="form-control">
+
       </div>
+
       <div class="col-6">
-        <label class="form-label small" for="report-to">To</label>
-        <input id="report-to" name="to" type="date" class="form-control">
+
+        <label class="form-label small" for="report-to">
+          To
+        </label>
+
+        {# Ending date for filtering attendance records. #}
+        <input id="report-to"
+               name="to"
+               type="date"
+               class="form-control">
+
       </div>
+
     </div>
+
     <div class="d-flex gap-2">
-      <button type="submit" name="format" value="xlsx" class="btn btn-primary flex-fill">Excel</button>
-      <button type="submit" name="format" value="csv" class="btn btn-outline-primary flex-fill">CSV</button>
+
+      {# Submit the report request in Excel format. #}
+      <button type="submit"
+              name="format"
+              value="xlsx"
+              class="btn btn-primary flex-fill">
+        Excel
+      </button>
+
+      {# Submit the report request in CSV format. #}
+      <button type="submit"
+              name="format"
+              value="csv"
+              class="btn btn-outline-primary flex-fill">
+        CSV
+      </button>
+
     </div>
-    <button type="submit" class="btn btn-link px-0 mt-2" formaction="{{ url_for('faculty.below_threshold', course_id=course.id) }}">
-      Show students below {{ config.ATTENDANCE_WARNING_PERCENT }}% for these dates
+
+    {# Use the same date filters to generate a list of students
+       whose attendance is below the configured warning percentage. #}
+    <button type="submit"
+            class="btn btn-link px-0 mt-2"
+            formaction="{{ url_for(
+              'faculty.below_threshold',
+              course_id=course.id
+            ) }}">
+
+      Show students below
+      {{ config.ATTENDANCE_WARNING_PERCENT }}%
+      for these dates
+
     </button>
+
   </form>
+
 </section>
+
 {% endif %}
 
+{# Student management section displays all students enrolled
+   in the selected course. #}
 <section class="panel">
+
   <h2 class="h5 mb-3">Students</h2>
+
   {% if entries %}
+
     <ul class="roster">
+
+      {# Loop through the enrolled students. #}
       {% for entry in entries %}
+
+        {# Extract the student object from the enrolment entry. #}
         {% set s = entry.student %}
+
         <li class="roster-row">
+
           <div class="roster-who">
-            <div class="fw-semibold">{{ s.full_name }}</div>
-            <div class="text-muted small">{{ s.username | upper }}{% if s.section %}, {{ s.section.code }}{% endif %}</div>
-            <div class="roster-status small">
-              {% if not s.is_active %}
-                <span class="status status-bad">Account deactivated</span>
-              {% elif s.must_change_password %}
-                <span class="status">Has not set a password yet</span>
-              {% elif s.face is none %}
-                <span class="status">Face not registered</span>
-              {% else %}
-                <span class="status status-ok">Ready</span>
+
+            <div class="fw-semibold">
+              {{ s.full_name }}
+            </div>
+
+            <div class="text-muted small">
+              {{ s.username | upper }}
+
+              {% if s.section %}
+                , {{ s.section.code }}
               {% endif %}
             </div>
+
+            <div class="roster-status small">
+
+              {# Check whether the student's account is active. #}
+              {% if not s.is_active %}
+
+                <span class="status status-bad">
+                  Account deactivated
+                </span>
+
+              {# Check whether the student still needs to
+                 change their temporary password. #}
+              {% elif s.must_change_password %}
+
+                <span class="status">
+                  Has not set a password yet
+                </span>
+
+              {# Check whether the student has registered their face. #}
+              {% elif s.face is none %}
+
+                <span class="status">
+                  Face not registered
+                </span>
+
+              {% else %}
+
+                {# Student is active, has a password and has
+                   registered their face successfully. #}
+                <span class="status status-ok">
+                  Ready
+                </span>
+
+              {% endif %}
+
+            </div>
+
           </div>
+
+          {# Display management actions only when both the student
+             account and course are active. #}
           {% if s.is_active and course.is_active %}
+
             <details class="row-actions">
-              <summary class="btn btn-sm btn-outline-primary">Actions</summary>
+
+              <summary class="btn btn-sm btn-outline-primary">
+                Actions
+              </summary>
+
               <div class="row-actions-menu">
+
+                {# Faculty can issue a new temporary password
+                   if the student cannot access their account. #}
                 <form method="post"
-                      action="{{ url_for('faculty.issue_temporary_password', course_id=course.id, username=s.username) }}"
+                      action="{{ url_for(
+                        'faculty.issue_temporary_password',
+                        course_id=course.id,
+                        username=s.username
+                      ) }}"
                       data-confirm="Give {{ s.full_name }} a new temporary password? Their current password stops working and they are signed out.">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-outline-primary w-100">New password</button>
+
+                  <input type="hidden"
+                         name="csrf_token"
+                         value="{{ csrf_token() }}">
+
+                  <button type="submit"
+                          class="btn btn-sm btn-outline-primary w-100">
+                    New password
+                  </button>
+
                 </form>
+
+                {# Face registration can be reset only when the
+                   student already has a registered face. #}
                 {% if s.face is not none %}
-                  <form method="post" class="mt-3"
-                        action="{{ url_for('faculty.reset_face', course_id=course.id, username=s.username) }}"
+
+                  <form method="post"
+                        class="mt-3"
+                        action="{{ url_for(
+                          'faculty.reset_face',
+                          course_id=course.id,
+                          username=s.username
+                        ) }}"
                         data-confirm="Reset {{ s.full_name }}'s face registration? They must register their face again before marking attendance.">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <label class="form-label small" for="reason-{{ s.id }}">Reason for face reset</label>
-                    <input id="reason-{{ s.id }}" name="reason" class="form-control form-control-sm mb-2"
-                           required minlength="3" maxlength="200" placeholder="e.g. face check keeps failing">
-                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">Reset face</button>
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    {# A reason is required for auditing face resets. #}
+                    <label class="form-label small"
+                           for="reason-{{ s.id }}">
+                      Reason for face reset
+                    </label>
+
+                    <input id="reason-{{ s.id }}"
+                           name="reason"
+                           class="form-control form-control-sm mb-2"
+                           required
+                           minlength="3"
+                           maxlength="200"
+                           placeholder="e.g. face check keeps failing">
+
+                    <button type="submit"
+                            class="btn btn-sm btn-outline-danger w-100">
+                      Reset face
+                    </button>
+
                   </form>
+
                 {% endif %}
+
               </div>
+
             </details>
+
           {% endif %}
+
         </li>
+
       {% endfor %}
+
     </ul>
+
   {% else %}
-    <p class="mb-0">No students are enrolled in this course yet. Ask the admin to enrol them.</p>
+
+    {# Displayed when the course does not have enrolled students. #}
+    <p class="mb-0">
+      No students are enrolled in this course yet.
+      Ask the admin to enrol them.
+    </p>
+
   {% endif %}
+
 </section>
+
 {% endblock %}
