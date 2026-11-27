@@ -1,23 +1,91 @@
+{#
+  This is the faculty dashboard or home page.
+
+  It displays:
+  1. The logged-in faculty member's name.
+  2. All courses assigned to that faculty member.
+  3. The number of students enrolled in each course.
+
+  Faculty can select a course to open its attendance management page.
+#}
+
+{# Inherit the common layout from base.html. #}
 {% extends "base.html" %}
-{% block title %}History{% endblock %}
+
+{# Set the browser tab title. #}
+{% block title %}Home{% endblock %}
+
 {% block content %}
-<p class="mb-2"><a href="{{ url_for('faculty.session', session_id=attendance.id) }}#roster">{{ attendance.course.code }}, {{ attendance.session_date.strftime("%d %b %Y") }}</a></p>
+
+{# Display the name of the currently logged-in faculty member.
+   current_user is provided by Flask-Login. #}
 <section class="panel">
-  <h1 class="h4 mb-1">{{ record.student.full_name }}</h1>
-  <p class="text-muted mb-3">{{ record.student.username | upper }}. Now: <strong>{{ record.status }}</strong>.</p>
-  <h2 class="h6">Changes, oldest first</h2>
-  {% if history %}
-    <ol class="history-list">
-      {% for h in history %}
-        <li>
-          <div><strong>{{ h.old_status or "no record" }} &rarr; {{ h.new_status }}</strong></div>
-          <div class="small text-muted">{{ h.changed_at | localtime("%d %b %Y, %H:%M") }} by {{ h.changed_by.full_name }}</div>
-          <div class="small">Reason: {{ h.reason }}</div>
-        </li>
-      {% endfor %}
-    </ol>
-  {% else %}
-    <p class="mb-0">No manual changes. This record was made by the {{ "face check" if record.method == "qr_face" else "system when attendance closed" }}.</p>
-  {% endif %}
+
+  <h1 class="h3 mb-0">
+    {{ current_user.full_name }}
+  </h1>
+
 </section>
+
+{# Display all courses assigned to the faculty member. #}
+<section class="panel">
+
+  <h2 class="h5 mb-3">
+    Courses you teach
+  </h2>
+
+  {# Check whether any courses have been assigned. #}
+  {% if courses %}
+
+    <ul class="course-list">
+
+      {# Each course entry contains the course object
+         and its enrolled student count. #}
+      {% for course, student_count in courses %}
+
+        <li>
+
+          {# Clicking the course code opens its course management page. #}
+          <a class="course-code"
+             href="{{ url_for(
+               'faculty.course',
+               course_id=course.id
+             ) }}">
+
+            {{ course.code }}
+
+          </a>
+
+          {# Display the course name. #}
+          <span class="course-name">
+            {{ course.name }}
+          </span>
+
+          {# Display academic term and enrolled student count. #}
+          <span class="course-term text-muted">
+
+            {{ course.term }},
+            {{ student_count }}
+            student{{ '' if student_count == 1 else 's' }}
+
+          </span>
+
+        </li>
+
+      {% endfor %}
+
+    </ul>
+
+  {% else %}
+
+    {# Inform the faculty member when no courses are assigned. #}
+    <p class="mb-0">
+      No courses are assigned to you yet.
+      Ask the admin to assign your courses.
+    </p>
+
+  {% endif %}
+
+</section>
+
 {% endblock %}
