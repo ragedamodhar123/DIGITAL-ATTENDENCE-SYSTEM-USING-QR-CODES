@@ -236,3 +236,175 @@ a.course-code:hover, a.course-code:focus { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* =====================================
+   Additional Responsive Improvements
+   ===================================== */
+
+/* Better box sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal overflow */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Responsive navigation */
+.app-bar-inner {
+  flex-wrap: wrap;
+}
+
+.app-user {
+  flex-wrap: wrap;
+}
+
+/* Responsive page spacing */
+.app-main {
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Better panel spacing */
+.panel {
+  overflow-wrap: anywhere;
+}
+
+/* Consistent form controls */
+.form-control,
+.form-select {
+  border-color: var(--line);
+  min-height: 2.75rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 .2rem rgba(31, 42, 68, .15);
+}
+
+/* Better button interaction */
+.btn {
+  transition: background-color .15s ease,
+              border-color .15s ease,
+              color .15s ease;
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Prevent long names from breaking layouts */
+.roster-who,
+.course-name,
+.app-user-name {
+  overflow-wrap: anywhere;
+}
+
+/* Better dropdown positioning */
+.row-actions-menu {
+  max-width: min(15rem, calc(100vw - 2rem));
+}
+
+/* Camera responsiveness */
+.camera,
+.qr-reader {
+  max-width: 100%;
+}
+
+/* QR code should remain square */
+.qr-box {
+  aspect-ratio: 1 / 1;
+}
+
+/* Better table responsiveness */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 576px) {
+
+  .app-bar-inner {
+    gap: .5rem;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+  }
+
+  .app-name {
+    font-size: 1rem;
+  }
+
+  .app-user {
+    gap: .4rem;
+  }
+
+  .app-user-name {
+    max-width: 8rem;
+  }
+
+  .app-main {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  .panel {
+    padding: 1rem;
+    border-radius: .5rem;
+  }
+
+  .course-list li {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    column-gap: .5rem;
+  }
+
+  .attendance-list a {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    column-gap: .5rem;
+  }
+
+  .roster-row {
+    gap: .5rem;
+  }
+
+  .live-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .live-counts {
+    gap: 1rem;
+  }
+
+  .count {
+    font-size: 1.6rem;
+  }
+
+  .temp-password {
+    font-size: 1.5rem;
+  }
+
+  .turn-arrow {
+    font-size: 3rem;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
