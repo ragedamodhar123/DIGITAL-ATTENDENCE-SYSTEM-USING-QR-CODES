@@ -1,26 +1,91 @@
+{#
+  This is the faculty dashboard or home page.
+
+  It displays:
+  1. The logged-in faculty member's name.
+  2. All courses assigned to that faculty member.
+  3. The number of students enrolled in each course.
+
+  Faculty can select a course to open its attendance management page.
+#}
+
+{# Inherit the common layout from base.html. #}
 {% extends "base.html" %}
+
+{# Set the browser tab title. #}
 {% block title %}Home{% endblock %}
+
 {% block content %}
+
+{# Display the name of the currently logged-in faculty member.
+   current_user is provided by Flask-Login. #}
 <section class="panel">
-  <h1 class="h3 mb-0">{{ current_user.full_name }}</h1>
+
+  <h1 class="h3 mb-0">
+    {{ current_user.full_name }}
+  </h1>
+
 </section>
 
+{# Display all courses assigned to the faculty member. #}
 <section class="panel">
-  <h2 class="h5 mb-3">Courses you teach</h2>
+
+  <h2 class="h5 mb-3">
+    Courses you teach
+  </h2>
+
+  {# Check whether any courses have been assigned. #}
   {% if courses %}
+
     <ul class="course-list">
+
+      {# Each course entry contains the course object
+         and its enrolled student count. #}
       {% for course, student_count in courses %}
+
         <li>
-          <a class="course-code" href="{{ url_for('faculty.course', course_id=course.id) }}">{{ course.code }}</a>
-          <span class="course-name">{{ course.name }}</span>
-          <span class="course-term text-muted">
-            {{ course.term }}, {{ student_count }} student{{ '' if student_count == 1 else 's' }}
+
+          {# Clicking the course code opens its course management page. #}
+          <a class="course-code"
+             href="{{ url_for(
+               'faculty.course',
+               course_id=course.id
+             ) }}">
+
+            {{ course.code }}
+
+          </a>
+
+          {# Display the course name. #}
+          <span class="course-name">
+            {{ course.name }}
           </span>
+
+          {# Display academic term and enrolled student count. #}
+          <span class="course-term text-muted">
+
+            {{ course.term }},
+            {{ student_count }}
+            student{{ '' if student_count == 1 else 's' }}
+
+          </span>
+
         </li>
+
       {% endfor %}
+
     </ul>
+
   {% else %}
-    <p class="mb-0">No courses are assigned to you yet. Ask the admin to assign your courses.</p>
+
+    {# Inform the faculty member when no courses are assigned. #}
+    <p class="mb-0">
+      No courses are assigned to you yet.
+      Ask the admin to assign your courses.
+    </p>
+
   {% endif %}
+
 </section>
+
 {% endblock %}
