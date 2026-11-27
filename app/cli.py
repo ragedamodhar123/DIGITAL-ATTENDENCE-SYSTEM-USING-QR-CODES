@@ -1,0 +1,358 @@
+"""Command-line tools, run with `flask --app wsgi <command>`.
+
+create-admin          First admin account and its API token (for Postman).
+seed-demo             Demo sections, faculty, students, courses and enrolments.
+download-face-models  The two OpenCV face model files (about 39 MB), checksum-verified.
+close-expired-sessions  Close attendance sessions left open past their time limit.
+check                 Readiness checklist (settings, database, schema, models, files...).
+backup-db             Verified PostgreSQL backup into BACKUP_DIR, keeping the newest BACKUP_KEEP.
+restore-db FILE       Replace the database with a backup (asks for confirmation).
+
+These are Flask commands rather than loose scripts so they automatically
+load .env, use the same config checks as the app, and can be tested.
+"""
+import secrets
+
+import click
+from sqlalchemy.exc import IntegrityError
+
+from .extensions import db
+from .models import Course, CourseFaculty, Enrollment, Role, Section, User
+from .utils.security import generate_api_token, hash_password
+from .utils.validators import is_blank, is_valid_username, normalize_username
+
+DEMO_PASSWORD = "Demo@12345"
+DEMO_TERM = "DEMO"
+
+
+def register_cli(app):
+    app.cli.add_command(create_admin)
+    app.cli.add_command(seed_demo)
+    app.cli.add_command(download_face_models)
+    app.cli.add_command(close_expired_sessions_command)
+    app.cli.add_command(check_command)
+    app.cli.add_command(backup_db_command)
+    app.cli.add_command(restore_db_command)
+
+
+# ---- create-admin --------------------------------------------------------
+
+@click.command("create-admin")
+@click.option("--username", required=True, help="Admin login ID (letters, digits, - or _).")
+@click.option("--name", "full_name", required=True, help="Admin's full name.")
+@click.option("--email", default=None, help="Optional email address.")
+@click.option(
+    "--rotate-token",
+    is_flag=True,
+    help="Admin already exists: issue a new API token and invalidate the old one.",
+)
+def create_admin(username, full_name, email, rotate_token):
+    """Create the admin account, or rotate its API token. Prints the token ONCE."""
+    username = normalize_username(username)
+    if not is_valid_username(username):
+        raise click.ClickException(
+            "Invalid username. Use 3-64 characters: lowercase letters, digits, - or _, "
+            "starting with a letter or digit."
+        )
+
+    existing = User.query.filter_by(username=username).one_or_none()
+
+    if existing is not None:
+        if not existing.is_admin:
+            raise click.ClickException(
+                f"'{username}' already belongs to a {existing.role} account. Choose another username."
+            )
+        if not rotate_token:
+            raise click.ClickException(
+                f"Admin '{username}' already exists. Use --rotate-token to issue a new API token."
+            )
+        token, token_hash = generate_api_token()
+        existing.api_token_hash = token_hash
+        db.session.commit()
+        _print_token(token, f"New API token for '{username}'. The old token no longer works.")
+        return
+
+    if rotate_token:
+        raise click.ClickException(f"No admin named '{username}' exists, so there is no token to rotate.")
+    if is_blank(full_name):
+        raise click.ClickException("--name cannot be blank.")
+
+    token, token_hash = generate_api_token()
+    admin = User(
+        username=username,
+        full_name=full_name,
+        email=email,
+        role=Role.ADMIN,
+        # Admins work through Postman with the API token. This random password
+        # is never shown, so the account cannot be logged into with a password.
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        must_change_password=False,
+        api_token_hash=token_hash,
+    )
+    db.session.add(admin)
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        # Most likely the email is already used by another account.
+        raise click.ClickException("Could not create admin: username or email already in use.") from exc
+
+    _print_token(token, f"Admin '{username}' created.")
+
+
+def _print_token(token, headline):
+    click.echo(headline)
+    click.echo("")
+    click.echo(f"API token: {token}")
+    click.echo("")
+    click.echo("Store it now (e.g. as a Postman environment secret). It will NOT be shown again.")
+    click.echo("Send it as the header:  Authorization: Bearer <token>")
+
+
+# ---- seed-demo -----------------------------------------------------------
+
+DEMO_SECTIONS = [
+    ("DEMO-CSE-A", "Demo CSE Section A"),
+    ("DEMO-CSE-B", "Demo CSE Section B"),
+    ("DEMO-ECE-A", "Demo ECE Section A"),
+]
+DEMO_FACULTY = [
+    ("demo-fac01", "Demo Faculty One"),
+    ("demo-fac02", "Demo Faculty Two"),
+]
+# (username, name, section code)
+DEMO_STUDENTS = [
+    (f"demo-stu{n:02d}", f"Demo Student {n:02d}", section)
+    for n, section in enumerate(
+        ["DEMO-CSE-A"] * 4 + ["DEMO-CSE-B"] * 3 + ["DEMO-ECE-A"] * 3, start=1
+    )
+]
+# (code, name, faculty usernames, sections whose students are enrolled)
+DEMO_COURSES = [
+    ("DS301", "Data Structures", ["demo-fac01"], ["DEMO-CSE-A", "DEMO-CSE-B"]),
+    ("DB302", "Database Systems", ["demo-fac01", "demo-fac02"], ["DEMO-CSE-A"]),
+    ("MA201", "Engineering Mathematics", ["demo-fac02"], ["DEMO-CSE-B", "DEMO-ECE-A"]),
+]
+
+
+@click.command("seed-demo")
+def seed_demo():
+    """Add demo data. Safe to run twice: existing demo rows are left untouched."""
+    from flask import current_app
+
+    if current_app.config.get("CONFIG_NAME") == "production":
+        raise click.ClickException("seed-demo is disabled in production.")
+
+    try:
+        created = _seed_demo_rows()
+    except Exception:
+        # All or nothing: never leave half the demo data behind.
+        db.session.rollback()
+        raise
+
+    click.echo("Demo data ready. Created: " + ", ".join(f"{v} {k}" for k, v in created.items()))
+    click.echo(f"Demo login password for all demo users: {DEMO_PASSWORD} (must be changed on first login)")
+
+
+def _seed_demo_rows():
+    created = {"sections": 0, "faculty": 0, "students": 0, "courses": 0, "assignments": 0, "enrollments": 0}
+    demo_hash = hash_password(DEMO_PASSWORD)
+
+    sections = {}
+    for code, name in DEMO_SECTIONS:
+        section = Section.query.filter_by(code=code).one_or_none()
+        if section is None:
+            section = Section(code=code, name=name)
+            db.session.add(section)
+            created["sections"] += 1
+        sections[code] = section
+    db.session.flush()
+
+    users = {}
+    for username, name in DEMO_FACULTY:
+        users[username] = _get_or_create_user(username, name, Role.FACULTY, demo_hash, None, created, "faculty")
+    for username, name, section_code in DEMO_STUDENTS:
+        users[username] = _get_or_create_user(
+            username, name, Role.STUDENT, demo_hash, sections[section_code], created, "students"
+        )
+    db.session.flush()
+
+    for code, name, faculty_names, section_codes in DEMO_COURSES:
+        course = Course.query.filter_by(code=code, term=DEMO_TERM).one_or_none()
+        if course is None:
+            course = Course(code=code, name=name, term=DEMO_TERM)
+            db.session.add(course)
+            db.session.flush()
+            created["courses"] += 1
+
+        for faculty_name in faculty_names:
+            faculty = users[faculty_name]
+            if not faculty.is_faculty:
+                raise click.ClickException(f"'{faculty_name}' exists but is not faculty; seed aborted.")
+            if db.session.get(CourseFaculty, (course.id, faculty.id)) is None:
+                db.session.add(CourseFaculty(course=course, faculty=faculty))
+                created["assignments"] += 1
+
+        for username, _name, section_code in DEMO_STUDENTS:
+            if section_code not in section_codes:
+                continue
+            student = users[username]
+            exists = Enrollment.query.filter_by(course_id=course.id, student_id=student.id).one_or_none()
+            if exists is None:
+                db.session.add(Enrollment(course=course, student=student))
+                created["enrollments"] += 1
+
+    db.session.commit()
+    return created
+
+
+def _get_or_create_user(username, name, role, password_hash, section, created, counter_key):
+    user = User.query.filter_by(username=username).one_or_none()
+    if user is not None:
+        if user.role != role:
+            raise click.ClickException(f"'{username}' exists with role '{user.role}', expected '{role}'; seed aborted.")
+        return user
+    user = User(
+        username=username,
+        full_name=name,
+        role=role,
+        password_hash=password_hash,
+        section=section,
+        must_change_password=True,
+    )
+    db.session.add(user)
+    created[counter_key] += 1
+    return user
+
+
+# ---- download-face-models ------------------------------------------------
+
+DOWNLOAD_TIMEOUT_SECONDS = 60
+
+
+@click.command("download-face-models")
+def download_face_models():
+    """Download the OpenCV face models and verify them against the official checksums."""
+    import hashlib
+    import os
+    import urllib.request
+
+    from flask import current_app
+
+    from .services.face_engine import MODEL_FILES, file_sha256
+
+    model_dir = current_app.config["FACE_MODEL_DIR"]
+    os.makedirs(model_dir, exist_ok=True)
+
+    for name, info in MODEL_FILES.items():
+        target = os.path.join(model_dir, name)
+        if os.path.isfile(target) and file_sha256(target) == info["sha256"]:
+            click.echo(f"{name}: already present and verified.")
+            continue
+
+        click.echo(f"{name}: downloading {info['size'] / 1_000_000:.1f} MB ...")
+        partial = target + ".part"
+        digest = hashlib.sha256()
+        try:
+            with urllib.request.urlopen(info["url"], timeout=DOWNLOAD_TIMEOUT_SECONDS) as response, open(partial, "wb") as out:
+                for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                    out.write(chunk)
+                    digest.update(chunk)
+        except OSError as exc:
+            _remove_quietly(partial)
+            raise click.ClickException(
+                f"Could not download {name}: {exc}. Check your internet connection and try again."
+            ) from exc
+
+        if digest.hexdigest() != info["sha256"]:
+            _remove_quietly(partial)
+            raise click.ClickException(
+                f"{name} did not match the official checksum, so it was discarded. "
+                "The download may have been interrupted or altered. Run the command again."
+            )
+        os.replace(partial, target)  # only a verified file ever gets the real name
+        click.echo(f"{name}: verified.")
+
+    click.echo(f"Face models ready in {model_dir}")
+
+
+def _remove_quietly(path):
+    import os
+
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+# ---- close-expired-sessions ----------------------------------------------
+
+@click.command("close-expired-sessions")
+def close_expired_sessions_command():
+    """Close attendance sessions that ran past their time limit (safe to run any time)."""
+    from .services.session_service import close_expired_sessions
+
+    closed = close_expired_sessions()
+    click.echo(f"Closed {closed} expired session(s).")
+
+
+# ---- check / backup-db / restore-db -------------------------------------------
+
+def print_readiness(results):
+    """Print the checklist; return True if nothing FAILed."""
+    for item in results:
+        click.echo(f"  [{item.status:<4}] {item.name}: {item.message}")
+    failed = [r for r in results if r.status == "FAIL"]
+    warned = [r for r in results if r.status == "WARN"]
+    if failed:
+        click.echo(f"{len(failed)} problem(s) must be fixed before using the app.")
+    elif warned:
+        click.echo(f"Ready, with {len(warned)} warning(s) worth fixing.")
+    else:
+        click.echo("Ready.")
+    return not failed
+
+
+@click.command("check")
+def check_command():
+    """Readiness checklist. Exit code 1 if anything must be fixed."""
+    from .services.ops_service import readiness
+
+    if not print_readiness(readiness()):
+        raise SystemExit(1)
+
+
+@click.command("backup-db")
+def backup_db_command():
+    """Back up the database (verified), deleting backups beyond BACKUP_KEEP."""
+    from .services.ops_service import BackupError, backup_database
+
+    try:
+        path, size, removed = backup_database()
+    except BackupError as exc:
+        raise click.ClickException(f"Backup failed: {exc}") from exc
+    click.echo(f"Backup written and verified: {path} ({size / 1024:.0f} KB)")
+    if removed:
+        click.echo(f"Removed {len(removed)} older backup(s).")
+
+
+@click.command("restore-db")
+@click.argument("backup_file", type=click.Path(dir_okay=False))
+@click.option("--yes", is_flag=True, help="Skip the confirmation question (for scripts).")
+def restore_db_command(backup_file, yes):
+    """Replace ALL current data with the contents of BACKUP_FILE."""
+    from flask import current_app
+
+    from .services.ops_service import BackupError, restore_database
+
+    database = current_app.config["SQLALCHEMY_DATABASE_URI"].rsplit("/", 1)[-1]
+    if not yes:
+        click.echo(f"This deletes everything currently in '{database}' and replaces it with {backup_file}.")
+        typed = click.prompt("Type the database name to continue", default="", show_default=False)
+        if typed.strip() != database:
+            raise click.ClickException("Cancelled: the name did not match. Nothing was changed.")
+    try:
+        restore_database(backup_file)
+    except BackupError as exc:
+        raise click.ClickException(f"Restore failed (the database was not changed): {exc}") from exc
+    click.echo(f"Restored '{database}' from {backup_file}. Restart the server.")

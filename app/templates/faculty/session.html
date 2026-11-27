@@ -1,0 +1,359 @@
+{#
+  This page manages an individual attendance session.
+
+  It has two main states:
+
+  1. OPEN SESSION:
+     - Displays the QR code.
+     - Shows attendance counts.
+     - Displays recent student check-ins.
+     - Automatically refreshes live attendance information using JavaScript.
+     - Allows faculty to stop attendance.
+     - Allows faculty to correct student attendance.
+
+  2. COMPLETED SESSION:
+     - Displays the final attendance summary.
+     - Shows present, absent and total student counts.
+     - Displays the student roster and correction options.
+#}
+
+{% extends "base.html" %}
+
+{% block title %}
+  Attendance {{ course.code }}
+{% endblock %}
+
+{% block content %}
+
+{# Navigation link to return to the course page. #}
+<p class="mb-2">
+
+  <a href="{{ url_for(
+    'faculty.course',
+    course_id=course.id
+  ) }}">
+
+    {{ course.code }}
+
+  </a>
+
+</p>
+
+{# Check whether the attendance session is currently running. #}
+{% if attendance.status == "open" %}
+
+  {# Warn faculty if the page is accessed through a local address.
+     Phones cannot access a QR URL containing localhost or a
+     private development address from another device. #}
+  {% if local_address %}
+
+    <div class="alert alert-warning">
+
+      You opened this page on a local address, so the QR code points to
+      <strong>{{ request.host }}</strong>, which phones cannot open.
+
+      Open this page through the Cloudflare Tunnel address instead
+      (see the README).
+
+    </div>
+
+  {% endif %}
+
+  {# Main live attendance section.
+     JavaScript uses the data attributes to obtain the API URL
+     and QR refresh configuration. #}
+  <section class="panel live-panel"
+           id="live-session"
+           data-live-url="{{ url_for(
+             'faculty_api.live',
+             session_id=attendance.id
+           ) }}"
+           data-grace-windows="{{ config.QR_GRACE_WINDOWS }}">
+
+    <div class="live-head">
+
+      <div>
+
+        {# Display the course information. #}
+        <h1 class="h4 mb-0">
+          {{ course.code }} {{ course.name }}
+        </h1>
+
+        {# Display the automatic session closing time. #}
+        <p class="text-muted mb-0 small">
+
+          Scan with your phone to mark attendance.
+
+          Closes automatically at
+
+          <span data-field="ends_at">
+            {{ attendance.expires_at | localtime }}
+          </span>.
+
+        </p>
+
+      </div>
+
+      {# JavaScript handles switching the attendance screen
+         into full-screen mode. #}
+      <button type="button"
+              class="btn btn-sm btn-outline-primary"
+              data-action="fullscreen">
+
+        Full screen
+
+      </button>
+
+    </div>
+
+    {# Initially hidden warning banner.
+       JavaScript displays it when the live attendance API
+       connection is lost. #}
+    <div class="alert alert-warning connection-banner d-none"
+         role="status">
+
+      Connection lost. Reconnecting...
+
+    </div>
+
+    {# Display an error if JavaScript is disabled in the browser. #}
+    <noscript>
+
+      <div class="alert alert-danger">
+        This page needs JavaScript to show the QR code.
+      </div>
+
+    </noscript>
+
+    {# QR code container.
+       JavaScript generates and updates the QR code here. #}
+    <div class="qr-box" data-state="loading">
+
+      <div class="qr-code" aria-live="off"></div>
+
+      {# Overlay displayed while the QR code is being generated. #}
+      <div class="qr-overlay">
+        Loading code...
+      </div>
+
+    </div>
+
+    {# Visual countdown bar indicating the QR code's validity period. #}
+    <div class="qr-timer" aria-hidden="true">
+
+      <div class="qr-timer-bar"></div>
+
+    </div>
+
+    {# Live attendance statistics section.
+       JavaScript updates these values using the faculty live API. #}
+    <div class="live-counts" aria-live="polite">
+
+      <div>
+
+        {# Number of students who have successfully marked present. #}
+        <span class="count" data-field="present">
+          {{ counts.present }}
+        </span>
+
+        <span class="count-label">present</span>
+
+      </div>
+
+      <div>
+
+        {# Number of students who have not checked in yet. #}
+        <span class="count" data-field="not_yet">
+          {{ counts.not_yet }}
+        </span>
+
+        <span class="count-label">not yet</span>
+
+      </div>
+
+      <div>
+
+        {# Total number of students enrolled in the session. #}
+        <span class="count" data-field="expected">
+          {{ counts.expected }}
+        </span>
+
+        <span class="count-label">enrolled</span>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  {# Displays the latest students who successfully checked in.
+     JavaScript updates this list without requiring a page reload. #}
+  <section class="panel">
+
+    <h2 class="h6 mb-2">
+      Latest check-ins
+    </h2>
+
+    <ol class="recent-list" data-field="recent">
+
+      {# Default message before any student checks in. #}
+      <li class="text-muted">
+        Nobody yet.
+      </li>
+
+    </ol>
+
+  </section>
+
+  {# Stop attendance form.
+     When submitted, the backend closes the session and marks
+     students who have not checked in as absent. #}
+  <form method="post"
+        action="{{ url_for(
+          'faculty.stop_attendance',
+          session_id=attendance.id
+        ) }}"
+        class="mb-3"
+        data-confirm="Stop attendance? Students who have not checked in will be marked absent.">
+
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-outline-danger btn-lg w-100">
+
+      Stop attendance
+
+    </button>
+
+  </form>
+
+  {# Explain how the roster behaves during an active session.
+     It displays the student information available when the page loaded. #}
+  <p class="small text-muted">
+
+    The list below shows students as they were when this page opened.
+    Reload to update it.
+
+    A student who failed the face check can be marked present here.
+
+  </p>
+
+  {# Include the common student roster partial.
+     This avoids writing the same attendance correction code twice. #}
+  {% include "faculty/_roster.html" %}
+
+{% else %}
+
+  {# This section is displayed after attendance has been completed. #}
+  <section class="panel">
+
+    <h1 class="h4 mb-1">
+      {{ course.code }} {{ course.name }}
+    </h1>
+
+    <p class="text-muted">
+
+      {# Display the attendance date. #}
+      {{ attendance.session_date.strftime("%d %b %Y") }},
+
+      {# Identify whether attendance was recorded manually
+         or closed after a QR-based session. #}
+      {% if attendance.kind == "manual" %}
+
+        recorded by hand
+
+      {% else %}
+
+        attendance closed at
+        {{ attendance.ended_at | localtime }}
+
+      {% endif %}.
+
+    </p>
+
+    {# Final attendance summary after the session is completed. #}
+    <div class="live-counts">
+
+      <div>
+
+        <span class="count">
+          {{ counts.present }}
+        </span>
+
+        <span class="count-label">
+          present
+        </span>
+
+      </div>
+
+      <div>
+
+        <span class="count">
+          {{ counts.absent }}
+        </span>
+
+        <span class="count-label">
+          absent
+        </span>
+
+      </div>
+
+      <div>
+
+        <span class="count">
+          {{ counts.expected }}
+        </span>
+
+        <span class="count-label">
+          total
+        </span>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  {# Reuse the same roster for completed sessions.
+     Faculty can still correct attendance and view correction history. #}
+  {% include "faculty/_roster.html" %}
+
+  {# Navigation link back to the course attendance page. #}
+  <a class="btn btn-outline-primary w-100"
+     href="{{ url_for(
+       'faculty.course',
+       course_id=course.id
+     ) }}">
+
+    Back to {{ course.code }}
+
+  </a>
+
+{% endif %}
+
+{% endblock %}
+
+{# Load live attendance JavaScript only when the session is open.
+   Completed sessions do not need QR generation or live API updates. #}
+{% block scripts %}
+
+  {% if attendance.status == "open" %}
+
+    {# Common JavaScript API utilities. #}
+    <script src="{{ url_for(
+      'static',
+      filename='js/api.js'
+    ) }}" defer></script>
+
+    {# Handles QR code generation, live updates, countdown
+       and fullscreen functionality. #}
+    <script src="{{ url_for(
+      'static',
+      filename='js/faculty-session.js'
+    ) }}" defer></script>
+
+  {% endif %}
+
+{% endblock %}

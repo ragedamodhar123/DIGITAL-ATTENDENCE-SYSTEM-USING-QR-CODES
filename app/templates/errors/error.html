@@ -1,0 +1,97 @@
+{#
+  GENERAL MESSAGE TEMPLATE
+
+  This template displays a message to the user.
+
+  It can be used for different situations, such as:
+  - Password changed successfully.
+  - Account-related notifications.
+  - Access or authentication messages.
+  - Other informational messages.
+
+  The template extends base.html to reuse the common
+  application layout.
+#}
+{% extends "base.html" %}
+
+{#
+  PAGE TITLE
+
+  The browser tab title is dynamically obtained
+  from the title variable supplied by the Flask backend.
+#}
+{% block title %}{{ title }}{% endblock %}
+
+{# Main content section of the page. #}
+{% block content %}
+
+{# Main message panel with a narrow layout. #}
+<section class="panel panel-narrow">
+
+  {#
+    MESSAGE HEADING
+
+    Displays the title dynamically.
+
+    Example:
+    If title = "Password Changed",
+    that heading will be displayed.
+
+    h3 defines the heading level.
+    mb-2 adds spacing below the heading.
+  #}
+  <h1 class="h3 mb-2">{{ title }}</h1>
+
+  {#
+    MESSAGE CONTENT
+
+    Displays the message provided by the Flask backend.
+
+    Example:
+    "Your password has been changed successfully."
+
+    The content changes depending on the situation.
+  #}
+  <p>{{ message }}</p>
+
+  {#
+    NAVIGATION BUTTON
+
+    Provides a link based on the user's authentication status.
+
+    url_for() generates the appropriate Flask route URL.
+
+    Conditional expression:
+    If current_user.is_authenticated is True:
+      Generate the URL for main.home.
+
+    Otherwise:
+      Generate the URL for auth.login.
+
+    This ensures that authenticated users are sent
+    to the home page, while unauthenticated users
+    are sent to the login page.
+  #}
+  <a class="btn btn-outline-primary" href="{{ url_for('main.home') if current_user.is_authenticated else url_for('auth.login') }}">
+
+    {#
+      DYNAMIC BUTTON TEXT
+
+      The button label also depends on authentication status.
+
+      If the user is authenticated:
+        Display "Go to your home page".
+
+      If the user is not authenticated:
+        Display "Go to log in".
+
+      This keeps the button text consistent with its destination.
+    #}
+    {{ 'Go to your home page' if current_user.is_authenticated else 'Go to log in' }}
+
+  </a>
+
+</section>
+
+{# Ends the main content block. #}
+{% endblock %}

@@ -1,0 +1,148 @@
+"""Application configuration.
+
+Every secret and environment-specific value comes from environment variables
+(the .env file in development). Nothing secret is hard-coded here.
+"""
+import os
+from datetime import timedelta
+
+from dotenv import load_dotenv
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+
+def _int_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable {name} must be an integer, got {raw!r}") from exc
+
+
+class BaseConfig:
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # pre_ping: silently replaces connections Postgres has dropped (e.g. after laptop sleep).
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 1800}
+
+    # Cookies: not readable by JavaScript, not sent on cross-site POSTs.
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = False
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = False
+    REMEMBER_COOKIE_DURATION = timedelta(days=14)
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+
+    # CSRF tokens live as long as the login session, so a faculty page left
+    # open through a long class does not fail with "CSRF token expired".
+    WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = None
+
+    # Largest accepted request body (face images are well under this).
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024
+
+    # Rate limiting. In-memory storage is fine for a single waitress process.
+    RATELIMIT_ENABLED = True
+    RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_HEADERS_ENABLED = True
+    # Applied to the login form in Module 1, part 3 (see app/utils/ratelimit.py).
+    RATELIMIT_LOGIN_PER_USER = "10 per 5 minutes"   # one username from one IP
+    RATELIMIT_LOGIN_PER_IP = "300 per 5 minutes"    # whole classroom behind one college IP
+
+    TRUSTED_PROXY_COUNT = _int_env("TRUSTED_PROXY_COUNT", 0)
+
+    # Operations (Module 7, part 2)
+    LOG_DIR = os.environ.get("LOG_DIR", "")              # empty = log to the terminal only
+    BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE_DIR, "backups"))
+    BACKUP_KEEP = _int_env("BACKUP_KEEP", 14)            # newest backups kept; older ones deleted
+    PG_BIN = os.environ.get("PG_BIN", "")                # PostgreSQL bin folder, if pg_dump is not on PATH
+    # Accept requests only for these host names (e.g. "attendance.college.edu"), comma
+    # separated. Empty = any host (fine for development and the trycloudflare tunnel).
+    # Blocks "Host header" tricks, e.g. making the QR link point to another site.
+    TRUSTED_HOSTS = [h.strip() for h in os.environ.get("TRUSTED_HOSTS", "").split(",") if h.strip()] or None
+    HSTS_ENABLED = False
+
+    # Face checks (Module 3). Calibrated on the official OpenCV models; see README "Face checks".
+    FACE_MODEL_DIR = os.environ.get("FACE_MODEL_DIR", os.path.join(BASE_DIR, "models"))
+    FACE_MATCH_THRESHOLD = 0.363          # cosine similarity; OpenCV's published value for SFace
+    FACE_MIN_DETECTION_SCORE = 0.85       # how sure the detector must be that it found a face
+    FACE_MIN_SIZE_PX = 80                 # face width/height in the (scaled) photo
+    FACE_EDGE_TOLERANCE_PX = 4            # how far a face box may stick out of the photo
+    FACE_MIN_SHARPNESS = 25.0             # blur check, measured on the face resized to 112 px
+    FACE_BRIGHTNESS_RANGE = (40.0, 225.0)  # mean face brightness, 0-255
+    FACE_ENROL_CAPTURES = 3               # photos taken when registering
+    FACE_MAX_IMAGE_BYTES = 3 * 1024 * 1024
+    FACE_MAX_IMAGE_SIDE = 4096
+    FACE_MIN_IMAGE_SIDE = 160
+    FACE_CHECK_RATE_LIMIT = "40 per 5 minutes"   # single-photo checks while registering
+    FACE_ENROL_RATE_LIMIT = "10 per 10 minutes"  # full registration attempts
+
+    # Attendance rules (used from Module 4 onward)
+    SCAN_RATE_LIMIT = "30 per 5 minutes"  # QR scans per student
+    FACE_CHECK_ATTEMPTS = 3                 # failed face/liveness checks allowed per check-in
+    # Liveness (head-turn challenge). "Offset" = how far the nose tip sits from the middle
+    # of the eyes, in eye-widths. Real "straight" faces measure up to ~0.07; a real slight
+    # turn (20 deg) moves it ~0.12; a flat photo or screen tilted 40 deg moved it at most
+    # 0.04 with the real detector. Turns are measured FROM the student's own straight pose.
+    FACE_STRAIGHT_MAX_OFFSET = 0.15         # roughly facing the camera at the start
+    FACE_TURN_MIN_OFFSET = 0.12             # each turn must move at least this far from straight
+    FACE_TURN_MATCH_THRESHOLD = 0.30        # turned frames must still be the same person
+    FACE_YAW_SIGN = 1                       # set to -1 only if real tests show left/right swapped
+    FACE_VERIFY_RATE_LIMIT = "20 per 5 minutes"  # face-check photos per student
+    # Optional: only accept scans from these networks, e.g. "203.0.113.0/24,198.51.100.7".
+    # Empty = any network. With Cloudflare Tunnel this is the phone's public IP address.
+    ATTENDANCE_ALLOWED_NETWORKS = [
+        net.strip() for net in os.environ.get("ATTENDANCE_ALLOWED_NETWORKS", "").split(",") if net.strip()
+    ]
+    APP_TIMEZONE = "Asia/Kolkata"
+    QR_ROTATION_SECONDS = 10
+    QR_GRACE_WINDOWS = 1
+    PENDING_CHECKIN_SECONDS = 60
+    SESSION_MAX_MINUTES = 120
+    # Attendance below this percentage is highlighted for students and in reports.
+    ATTENDANCE_WARNING_PERCENT = 75
+
+
+class DevelopmentConfig(BaseConfig):
+    DEBUG = True
+
+
+class TestingConfig(BaseConfig):
+    TESTING = True
+    SECRET_KEY = "test-secret-key-only-for-automated-tests"
+    SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
+    # Disabled for most tests; a dedicated test re-enables it to prove CSRF works.
+    WTF_CSRF_ENABLED = False
+    # Rate limits stay ON in tests (counters are reset before every test), so the
+    # tests exercise the same limits as the real app.
+    RATELIMIT_STORAGE_URI = "memory://"
+
+
+class ProductionConfig(BaseConfig):
+    DEBUG = False
+    LOG_DIR = os.environ.get("LOG_DIR", os.path.join(BASE_DIR, "logs"))
+    # Enough database connections for every waitress thread (WAITRESS_THREADS, default 8).
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 1800, "pool_size": 10, "max_overflow": 10}
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "https"
+    HSTS_ENABLED = True
+    # "__Host-" cookies are only accepted by browsers over HTTPS, for this exact site,
+    # path "/": they cannot be set or overwritten by another subdomain.
+    SESSION_COOKIE_NAME = "__Host-session"
+    REMEMBER_COOKIE_NAME = "__Host-remember"
+
+
+CONFIG_BY_NAME = {
+    "development": DevelopmentConfig,
+    "testing": TestingConfig,
+    "production": ProductionConfig,
+}

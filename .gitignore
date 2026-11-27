@@ -1,0 +1,17 @@
+.env
+.env.production
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+instance/
+*.log
+requirements.lock
+
+# Face model files (downloaded with: flask --app wsgi download-face-models)
+models/
+
+# Operations
+logs/
+backups/

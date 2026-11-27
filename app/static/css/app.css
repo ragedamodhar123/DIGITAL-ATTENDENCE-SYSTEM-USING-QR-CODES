@@ -1,0 +1,410 @@
+/* Attendance app styles. Bootstrap 5 does the heavy lifting; this file sets the
+   palette and a few layout pieces. Built for phones first. */
+
+:root {
+  --ink: #1f2a44;          /* primary: headings, bar, buttons */
+  --ink-hover: #2c3b5e;
+  --page: #f3f5f8;         /* page background */
+  --panel: #ffffff;        /* content panels */
+  --line: #d9dee7;         /* panel borders */
+  --muted: #5b6475;        /* secondary text (passes WCAG AA on white) */
+  --ok: #1e7f5c;           /* success */
+  --bad: #b3261e;          /* errors */
+
+  --bs-body-bg: var(--page);
+  --bs-body-color: #1d2433;
+  --bs-secondary-color: var(--muted);
+  --bs-border-color: var(--line);
+  --bs-link-color: var(--ink);
+  --bs-link-hover-color: var(--ink-hover);
+  --bs-success: var(--ok);
+  --bs-danger: var(--bad);
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  line-height: 1.5;
+}
+
+.text-muted { color: var(--muted) !important; }
+
+/* Top bar */
+.app-bar { background: var(--ink); color: #fff; }
+.app-bar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; min-height: 3.5rem;
+}
+.app-name { color: #fff; font-weight: 700; font-size: 1.125rem; text-decoration: none; }
+.app-name:hover, .app-name:focus { color: #fff; text-decoration: underline; }
+.app-user { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.app-user-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12rem;
+  opacity: .9;
+}
+
+/* Page body */
+.app-main { max-width: 44rem; padding-top: 1.5rem; padding-bottom: 3rem; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.panel-narrow { max-width: 26rem; margin-left: auto; margin-right: auto; }
+.panel-quiet { background: transparent; border-style: dashed; }
+
+h1, h2, .h3, .h5 { color: var(--ink); font-weight: 700; }
+
+/* Buttons: one primary colour, generous tap targets on phones */
+.btn-primary {
+  --bs-btn-bg: var(--ink); --bs-btn-border-color: var(--ink);
+  --bs-btn-hover-bg: var(--ink-hover); --bs-btn-hover-border-color: var(--ink-hover);
+  --bs-btn-active-bg: var(--ink-hover); --bs-btn-active-border-color: var(--ink-hover);
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--ink); --bs-btn-border-color: var(--ink);
+  --bs-btn-hover-bg: var(--ink); --bs-btn-hover-border-color: var(--ink);
+}
+.btn-lg { min-height: 3rem; }
+
+/* Clearly visible keyboard focus everywhere */
+:focus-visible { outline: 3px solid #4d7cff; outline-offset: 2px; }
+
+/* Course lists */
+.course-list { list-style: none; margin: 0; padding: 0; }
+.course-list li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  column-gap: .75rem;
+  padding: .75rem 0;
+  border-top: 1px solid var(--line);
+}
+.course-list li:first-child { border-top: 0; padding-top: 0; }
+.course-code { font-weight: 700; color: var(--ink); grid-row: span 2; }
+.course-term { font-size: .875rem; }
+
+/* Course codes that are links */
+a.course-code { text-decoration: none; }
+a.course-code:hover, a.course-code:focus { text-decoration: underline; }
+
+/* Roster */
+.roster { list-style: none; margin: 0; padding: 0; }
+.roster-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .75rem 0; border-top: 1px solid var(--line);
+}
+.roster-row:first-child { border-top: 0; padding-top: 0; }
+.roster-who { min-width: 0; }
+.status { color: var(--muted); }
+.status-ok { color: var(--ok); }
+.status-bad { color: var(--bad); }
+
+/* Per-student actions on the roster: a small menu, so the row stays readable on phones */
+.row-actions { position: relative; flex-shrink: 0; }
+.row-actions > summary { list-style: none; }
+.row-actions > summary::-webkit-details-marker { display: none; }
+.row-actions-menu {
+  position: absolute; right: 0; z-index: 10; width: 15rem; margin-top: .25rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: .5rem;
+  padding: .75rem; box-shadow: 0 .5rem 1.5rem rgba(16, 23, 42, .15);
+}
+
+/* Student attendance */
+.attendance-list, .class-list { list-style: none; margin: 0; padding: 0; }
+.attendance-list li, .class-list li {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: .625rem 0; border-top: 1px solid var(--line);
+}
+.attendance-list li:first-child, .class-list li:first-child { border-top: 0; }
+.attendance-list a { text-decoration: none; display: grid; grid-template-columns: 5.5rem 1fr; column-gap: .75rem; min-width: 0; }
+.attendance-list a:hover .course-name, .attendance-list a:focus .course-name { text-decoration: underline; }
+.attendance-figure { text-align: right; white-space: nowrap; display: flex; flex-direction: column; }
+.attendance-figure.below strong, .count-bad { color: var(--bad); }
+
+/* Session list on the course page */
+.session-list { list-style: none; margin: 0; padding: 0; }
+.session-list li {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: .5rem 0; border-top: 1px solid var(--line);
+}
+.session-list li:first-child { border-top: 0; }
+.session-list a { text-decoration: none; display: flex; flex-direction: column; }
+.session-list a:hover .fw-semibold, .session-list a:focus .fw-semibold { text-decoration: underline; }
+
+/* Corrections */
+.roster-pick { flex-shrink: 0; margin-top: 0; }
+.roster-row .roster-who { flex: 1; }
+.bulk-marks { margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--line); }
+.history-list { padding-left: 1.25rem; margin: 0; }
+.history-list li { padding: .5rem 0; border-top: 1px solid var(--line); }
+.history-list li:first-child { border-top: 0; }
+.pick-list { list-style: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; }
+.pick-list li { padding: .375rem 0 .375rem 1.75rem; border-top: 1px solid var(--line); }
+
+/* Temporary password: large, spaced, easy to read aloud or copy by hand */
+.temp-password {
+  font-size: 2rem; font-weight: 700; letter-spacing: .08em; text-align: center;
+  color: var(--ink); background: var(--page); border: 1px solid var(--line);
+  border-radius: .5rem; padding: 1rem; margin-bottom: 1rem;
+  user-select: all; word-break: break-all;
+}
+
+/* Face registration camera */
+.camera {
+  position: relative; aspect-ratio: 3 / 4; max-height: 60vh; margin: 0 auto 1rem;
+  background: #10172a; border-radius: .75rem; overflow: hidden;
+}
+.camera-video {
+  width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1);            /* preview behaves like a mirror; the photo itself is not flipped */
+}
+.camera-guide {                      /* oval showing where to put the face */
+  position: absolute; left: 50%; top: 46%; width: 58%; height: 62%;
+  transform: translate(-50%, -50%);
+  border: 3px dashed rgba(255, 255, 255, .8); border-radius: 50%;
+  box-shadow: 0 0 0 100vmax rgba(16, 23, 42, .35);
+  pointer-events: none;
+}
+.camera-placeholder {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, .75);
+}
+.camera[data-state="idle"] .camera-guide,
+.camera[data-state="idle"] .camera-video { visibility: hidden; }
+.camera[data-state="live"] .camera-placeholder { display: none; }
+
+.capture-steps { display: flex; justify-content: center; gap: .75rem; list-style: none; padding: 0; margin: 0 0 .75rem; }
+.capture-step { width: .9rem; height: .9rem; border-radius: 50%; border: 2px solid var(--ink); }
+.capture-step.current { box-shadow: 0 0 0 3px rgba(31, 42, 68, .2); }
+.capture-step.done { background: var(--ok); border-color: var(--ok); }
+.capture-prompt { text-align: center; min-height: 3rem; }
+
+/* Live attendance screen */
+.live-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.qr-box {
+  position: relative; width: min(100%, 70vmin, 32rem); aspect-ratio: 1; margin: 0 auto;
+  background: #fff; border-radius: .5rem;
+}
+.qr-code svg { display: block; width: 100%; height: 100%; }
+.qr-overlay {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  text-align: center; padding: 1rem; font-weight: 700; color: var(--ink);
+  background: rgba(255, 255, 255, .85); border-radius: .5rem;
+}
+.qr-box[data-state="loading"] .qr-overlay,
+.qr-box[data-state="stale"] .qr-overlay,
+.qr-box[data-state="closed"] .qr-overlay { display: flex; }
+.qr-box[data-state="stale"] .qr-code { filter: blur(8px); }   /* an expired code must not be scannable */
+.qr-timer { width: min(100%, 70vmin, 32rem); height: .375rem; margin: .75rem auto 1rem; background: var(--line); border-radius: 1rem; overflow: hidden; }
+.qr-timer-bar { height: 100%; width: 100%; background: var(--ink); }
+.live-counts { display: flex; justify-content: center; gap: 2rem; text-align: center; }
+.count { display: block; font-size: 2rem; font-weight: 700; color: var(--ink); line-height: 1.1; }
+.count-label { font-size: .875rem; color: var(--muted); }
+.recent-list { margin: 0; padding-left: 1.25rem; }
+.recent-list li { padding: .125rem 0; }
+
+/* Full screen on a projector: the code as large as possible */
+.live-panel:fullscreen { background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 2rem; }
+.live-panel:fullscreen .qr-box,
+.live-panel:fullscreen .qr-timer { width: min(85vmin, 90vw); }
+.live-panel:fullscreen .count { font-size: 3rem; }
+
+/* Student home: attendance open right now */
+.panel-highlight { border-color: var(--ok); box-shadow: inset 4px 0 0 var(--ok); }
+
+/* In-app scanner */
+.qr-reader { width: 100%; max-width: 26rem; margin: 0 auto .75rem; border-radius: .75rem; overflow: hidden; background: #10172a; min-height: 12rem; }
+.qr-reader video { width: 100% !important; height: auto !important; display: block; }
+.scan-status { min-height: 1.5rem; }
+
+/* Liveness: big arrow over the camera showing which way to turn */
+.turn-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 4rem; font-weight: 700; line-height: 1; color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .6); pointer-events: none;
+}
+.turn-arrow[data-dir="L"] { left: .75rem; }
+.turn-arrow[data-dir="R"] { right: .75rem; }
+.turn-arrow[data-dir=""] { display: none; }
+
+/* Attendance face check: a smaller camera so the buttons stay on screen */
+.camera-small { max-height: 45vh; }
+.checkin-timer { margin-top: -.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* =====================================
+   Additional Responsive Improvements
+   ===================================== */
+
+/* Better box sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal overflow */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Responsive navigation */
+.app-bar-inner {
+  flex-wrap: wrap;
+}
+
+.app-user {
+  flex-wrap: wrap;
+}
+
+/* Responsive page spacing */
+.app-main {
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Better panel spacing */
+.panel {
+  overflow-wrap: anywhere;
+}
+
+/* Consistent form controls */
+.form-control,
+.form-select {
+  border-color: var(--line);
+  min-height: 2.75rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 .2rem rgba(31, 42, 68, .15);
+}
+
+/* Better button interaction */
+.btn {
+  transition: background-color .15s ease,
+              border-color .15s ease,
+              color .15s ease;
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Prevent long names from breaking layouts */
+.roster-who,
+.course-name,
+.app-user-name {
+  overflow-wrap: anywhere;
+}
+
+/* Better dropdown positioning */
+.row-actions-menu {
+  max-width: min(15rem, calc(100vw - 2rem));
+}
+
+/* Camera responsiveness */
+.camera,
+.qr-reader {
+  max-width: 100%;
+}
+
+/* QR code should remain square */
+.qr-box {
+  aspect-ratio: 1 / 1;
+}
+
+/* Better table responsiveness */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 576px) {
+
+  .app-bar-inner {
+    gap: .5rem;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+  }
+
+  .app-name {
+    font-size: 1rem;
+  }
+
+  .app-user {
+    gap: .4rem;
+  }
+
+  .app-user-name {
+    max-width: 8rem;
+  }
+
+  .app-main {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  .panel {
+    padding: 1rem;
+    border-radius: .5rem;
+  }
+
+  .course-list li {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    column-gap: .5rem;
+  }
+
+  .attendance-list a {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    column-gap: .5rem;
+  }
+
+  .roster-row {
+    gap: .5rem;
+  }
+
+  .live-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .live-counts {
+    gap: 1rem;
+  }
+
+  .count {
+    font-size: 1.6rem;
+  }
+
+  .temp-password {
+    font-size: 1.5rem;
+  }
+
+  .turn-arrow {
+    font-size: 3rem;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

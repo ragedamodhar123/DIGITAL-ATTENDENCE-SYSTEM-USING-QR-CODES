@@ -1,0 +1,348 @@
+{# 
+  This template handles the student's attendance check-in process.
+
+  It displays different messages depending on the attendance status:
+  1. Error messages when attendance cannot be marked.
+  2. A message when attendance is already recorded.
+  3. Face verification interface when attendance is ready to be marked.
+
+  The template extends base.html to reuse the common page layout.
+#}
+{% extends "base.html" %}
+
+{#
+  Dictionary containing user-friendly titles for different attendance errors.
+
+  The key represents the error reason received from the Flask backend.
+  The value represents the title displayed to the student.
+
+  Example:
+  If problem.reason = "expired_code",
+  the heading displayed will be "Code expired".
+#}
+{% set titles = {
+  "expired_code": "Code expired",
+  "invalid_code": "Not an attendance code",
+  "session_closed": "Attendance has ended",
+  "not_enrolled": "Not your course",
+  "face_not_registered": "Face not registered",
+  "outside_network": "Not on college Wi-Fi",
+  "already_recorded": "Already recorded",
+} %}
+
+{# Sets the browser tab title to Attendance. #}
+{% block title %}Attendance{% endblock %}
+
+{# Main content section of the attendance page. #}
+{% block content %}
+
+{# 
+  panel and panel-narrow are CSS classes used for styling.
+  checkin identifies this section as the attendance check-in area.
+#}
+<section class="panel panel-narrow checkin">
+
+  {#
+    CASE 1: ATTENDANCE ERROR
+
+    Checks whether the backend has provided an error object.
+
+    If problem exists, the page displays the appropriate error
+    message instead of showing the face verification interface.
+  #}
+  {% if problem %}
+
+    {#
+      Displays the error title using the titles dictionary.
+
+      titles.get() searches for the matching error reason.
+      If no matching reason exists, it displays
+      "Cannot mark attendance" as the default heading.
+    #}
+    <h1 class="h3 mb-2">{{ titles.get(problem.reason, "Cannot mark attendance") }}</h1>
+
+    {# Displays the detailed error message received from Flask. #}
+    <p>{{ problem.message }}</p>
+
+    {#
+      If the QR code has expired or is invalid,
+      the student is redirected to the QR scanning page.
+    #}
+    {% if problem.reason in ("expired_code", "invalid_code") %}
+
+      {# Allows the student to scan the QR code again. #}
+      <a class="btn btn-primary btn-lg w-100" href="{{ url_for('student.scan') }}">Scan again</a>
+
+    {#
+      If the student's face is not registered,
+      redirect them to the face registration page.
+    #}
+    {% elif problem.reason == "face_not_registered" %}
+
+      {# Opens the face enrollment page. #}
+      <a class="btn btn-primary btn-lg w-100" href="{{ url_for('face.enroll') }}">Register your face</a>
+
+    {#
+      For all other errors, redirect the student
+      to their dashboard.
+    #}
+    {% else %}
+
+      {# Provides navigation back to the student dashboard. #}
+      <a class="btn btn-outline-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+    {% endif %}
+
+  {#
+    CASE 2: ATTENDANCE ALREADY MARKED
+
+    Checks whether the student's attendance status is
+    "already_present".
+
+    In this situation, face verification is not required again.
+  #}
+  {% elif result.status == "already_present" %}
+
+    {# Displays confirmation that attendance is already recorded. #}
+    <h1 class="h3 mb-2">Already marked present</h1>
+
+    {#
+      Displays the course code and course name dynamically.
+
+      result.course.code = Course code
+      result.course.name = Course name
+    #}
+    <p>You are already marked present for {{ result.course.code }} {{ result.course.name }}. Nothing more to do.</p>
+
+    {# Provides a link back to the student dashboard. #}
+    <a class="btn btn-outline-primary w-100" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+
+  {#
+    CASE 3: FACE VERIFICATION
+
+    This section is displayed when there is no error
+    and attendance is not already marked.
+
+    The student can start the camera and complete
+    face verification.
+  #}
+  {% else %}
+
+    {#
+      Main container for the face verification process.
+
+      id="attend-face" allows JavaScript to identify this element.
+
+      The data-* attributes pass information from Flask/Jinja
+      to JavaScript without hardcoding values in JavaScript.
+    #}
+    <div id="attend-face"
+
+         {# Unique ID of the current attendance session. #}
+         data-session-id="{{ result.session.id }}"
+
+         {# Backend API endpoint used for face verification. #}
+         data-face-url="{{ url_for('attend_api.face_check', session_id=result.session.id) }}"
+
+         {# URL used when the student needs to scan the QR code again. #}
+         data-scan-url="{{ url_for('student.scan') }}"
+
+         {# URL of the student dashboard. #}
+         data-home-url="{{ url_for('student.dashboard') }}"
+
+         {# Remaining time available to complete attendance verification. #}
+         data-seconds="{{ seconds_left }}"
+
+         {# Challenge information used by the face verification process. #}
+         data-challenge="{{ result.challenge }}">
+
+      {# Heading displayed during face verification. #}
+      <h1 class="h3 mb-1" data-field="title">Face check</h1>
+
+      {# Displays the course code and course name. #}
+      <p class="text-muted mb-3">{{ result.course.code }} {{ result.course.name }}</p>
+
+      {#
+        NOSCRIPT SECTION
+
+        Displays a warning if JavaScript is disabled
+        in the student's browser.
+
+        Face verification requires JavaScript to access
+        the camera and communicate with the backend.
+      #}
+      <noscript><div class="alert alert-danger">This page needs JavaScript for the face check.</div></noscript>
+
+      {#
+        CAMERA PREVIEW SECTION
+
+        camera and camera-small are CSS classes used
+        to control the camera preview layout.
+
+        data-state="idle" indicates that the camera
+        has not started yet.
+      #}
+      <div class="camera camera-small" data-state="idle">
+
+        {#
+          Video element used to display the live camera feed.
+
+          playsinline: Plays video directly inside the page,
+          especially on mobile devices.
+
+          muted: Disables audio.
+
+          autoplay: Starts video playback automatically
+          when a camera stream is assigned.
+
+          aria-label: Provides an accessible description.
+        #}
+        <video class="camera-video" playsinline muted autoplay aria-label="Camera preview"></video>
+
+        {# Visual guide displayed over the camera preview. #}
+        <div class="camera-guide" aria-hidden="true"></div>
+
+        {# Arrow indicator used to guide the student's head movement. #}
+        <div class="turn-arrow" aria-hidden="true"></div>
+
+        {# Placeholder displayed while the camera is switched off. #}
+        <div class="camera-placeholder">Camera is off</div>
+      </div>
+
+      {#
+        CAPTURE INSTRUCTIONS
+
+        Explains how the student should position their face.
+
+        aria-live="assertive" allows screen readers to announce
+        important instruction updates made by JavaScript.
+      #}
+      <p class="capture-prompt" aria-live="assertive">Press "Start camera". You will look straight, then turn your head slightly each way when the arrows show.</p>
+
+      {#
+        ATTENDANCE TIMER
+
+        Displays the remaining time for completing face verification.
+
+        seconds_left is received dynamically from Flask.
+
+        JavaScript can update the value inside the span.
+      #}
+      <p class="checkin-timer small text-muted text-center" aria-live="off">Time left: <span data-field="seconds">{{ seconds_left }}</span> s</p>
+
+      {#
+        ERROR MESSAGE CONTAINER
+
+        Initially hidden using d-none.
+
+        JavaScript removes d-none and displays an error
+        if camera access or face verification fails.
+
+        role="alert" makes the error accessible to screen readers.
+      #}
+      <div class="alert alert-danger capture-error d-none" role="alert"></div>
+
+      {#
+        SUCCESS MESSAGE CONTAINER
+
+        Initially hidden.
+
+        JavaScript displays this element when
+        face verification and attendance processing succeed.
+
+        role="status" announces the updated status accessibly.
+      #}
+      <div class="alert alert-success checkin-done d-none" role="status"></div>
+
+      {#
+        ACTION BUTTONS
+
+        d-grid and gap-2 arrange the buttons vertically
+        with spacing between them.
+
+        JavaScript identifies each button using data-action.
+      #}
+      <div class="d-grid gap-2">
+
+        {#
+          START CAMERA BUTTON
+
+          Initially visible.
+
+          Clicking this button starts the camera
+          and begins the face verification process.
+        #}
+        <button type="button" class="btn btn-primary btn-lg" data-action="start">Start camera</button>
+
+        {#
+          CHECK MY FACE BUTTON
+
+          Initially hidden using d-none.
+
+          JavaScript displays it when the student
+          is ready to submit the face verification.
+        #}
+        <button type="button" class="btn btn-primary btn-lg d-none" data-action="capture">Check my face</button>
+
+        {#
+          RESCAN BUTTON
+
+          Initially hidden.
+
+          Displayed by JavaScript when the student
+          needs to scan the QR code again.
+        #}
+        <a class="btn btn-outline-primary btn-lg d-none" data-action="rescan" href="{{ url_for('student.scan') }}">Scan the code again</a>
+
+        {#
+          HOME BUTTON
+
+          Initially hidden.
+
+          Used to navigate back to the student dashboard
+          after the verification process.
+        #}
+        <a class="btn btn-outline-primary btn-lg d-none" data-action="home" href="{{ url_for('student.dashboard') }}">Go to your home page</a>
+      </div>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{#
+  JAVASCRIPT FILES
+
+  This block loads the JavaScript files required for
+  the face verification process.
+
+  These files are loaded only when result.status is "ready".
+
+  This avoids loading unnecessary camera and API scripts
+  when an error occurs or attendance is already recorded.
+#}
+{% block scripts %}
+
+{# Check whether the attendance session is ready for face verification. #}
+{% if result and result.status == "ready" %}
+
+  {#
+    api.js:
+    Handles communication between the frontend and backend APIs.
+  #}
+  <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+
+  {#
+    camera.js:
+    Handles camera access and live video stream operations.
+  #}
+  <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+
+  {#
+    attend-face.js:
+    Controls the attendance face verification workflow,
+    including user actions, verification instructions,
+    timer updates and verification results.
+  #}
+  <script src="{{ url_for('static', filename='js/attend-face.js') }}" defer></script>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,165 @@
+{# 
+  Extends the common base.html template.
+  The navigation bar, common page structure, CSS and other shared elements
+  are inherited from base.html.
+#}
+{% extends "base.html" %}
+
+{# Sets the browser page title to Home. #}
+{% block title %}Home{% endblock %}
+
+{# Starts the main content section of the student dashboard. #}
+{% block content %}
+
+{# --------------------------------------------------
+   SECTION 1: STUDENT PROFILE
+   Displays the logged-in student's personal details.
+   -------------------------------------------------- #}
+<section class="panel">
+
+  {# Displays the full name of the currently logged-in student. #}
+  <h1 class="h3 mb-1">{{ current_user.full_name }}</h1>
+
+  <p class="text-muted mb-0">
+
+    {# Displays the student's username in uppercase as the roll number. #}
+    Roll number {{ current_user.username | upper }}
+
+    {# Checks whether the student belongs to a section.
+       If a section exists, its section code is displayed. #}
+    {% if current_user.section %}
+      , section {{ current_user.section.code }}
+    {% endif %}
+
+  </p>
+</section>
+
+
+{# --------------------------------------------------
+   SECTION 2: OPEN ATTENDANCE SESSIONS
+   Displays courses for which attendance is currently open.
+   The panel gets an additional highlight class when
+   at least one attendance session is open.
+   -------------------------------------------------- #}
+<section class="panel{% if open_sessions %} panel-highlight{% endif %}">
+
+  {# Checks whether there are any currently open sessions. #}
+  {% if open_sessions %}
+
+    {# Displays the heading when attendance is open. #}
+    <h2 class="h5 mb-2">Attendance is open</h2>
+
+    {# Displays the list of courses having open attendance sessions. #}
+    <ul class="mb-3">
+
+      {# Loops through every open attendance session. #}
+      {% for s in open_sessions %}
+
+        {# Displays the course code and course name. #}
+        <li>{{ s.course.code }} {{ s.course.name }}</li>
+
+      {% endfor %}
+    </ul>
+
+  {% endif %}
+
+  {# Button that redirects the student to the QR scanning page.
+     The student can scan the attendance QR code from there. #}
+  <a class="btn btn-primary btn-lg w-100"
+     href="{{ url_for('student.scan') }}">
+    Scan attendance code
+  </a>
+
+</section>
+
+
+{# --------------------------------------------------
+   SECTION 3: ATTENDANCE SUMMARY
+   Displays the attendance percentage and class count
+   for each course associated with the student.
+   -------------------------------------------------- #}
+<section class="panel">
+
+  {# Heading for the attendance summary section. #}
+  <h2 class="h5 mb-1">Your attendance</h2>
+
+  {# Explains that only completed classes are counted.
+     Attendance below the configured threshold is highlighted. #}
+  <p class="text-muted small mb-3">
+    Counts finished classes. Below {{ threshold }}% is highlighted.
+  </p>
+
+  {# Checks whether attendance summaries are available. #}
+  {% if summaries %}
+
+    {# Creates a list of attendance summaries for different courses. #}
+    <ul class="attendance-list">
+
+      {# Loops through each course attendance summary. #}
+      {% for s in summaries %}
+
+        <li>
+
+          {# Clicking a course opens its individual attendance details page.
+             The course ID is passed to the student.course route. #}
+          <a href="{{ url_for('student.course', course_id=s.course.id) }}">
+
+            {# Displays the course code. #}
+            <span class="course-code">{{ s.course.code }}</span>
+
+            {# Displays the course name.
+               If the student is no longer enrolled, that information
+               is also displayed beside the course name. #}
+            <span class="course-name">
+              {{ s.course.name }}
+              {% if not s.enrolled %}
+                <span class="text-muted small">(no longer enrolled)</span>
+              {% endif %}
+            </span>
+
+          </a>
+
+          {# Displays the attendance percentage and class count.
+             Adds the 'below' CSS class if attendance is below threshold. #}
+          <span class="attendance-figure{% if s.below_threshold %} below{% endif %}">
+
+            {# Checks whether a percentage is available.
+               If it is none, no finished classes are available yet. #}
+            {% if s.percent is none %}
+
+              <span class="text-muted small">no classes yet</span>
+
+            {% else %}
+
+              {# Displays the student's attendance percentage. #}
+              <strong>{{ s.percent }}%</strong>
+
+              {# Displays the number of classes attended
+                 out of the total finished classes. #}
+              <span class="small text-muted">
+                {{ s.present }} of {{ s.total }}
+              </span>
+
+            {% endif %}
+
+          </span>
+
+        </li>
+
+      {% endfor %}
+    </ul>
+
+  {% else %}
+
+    {# Displayed when the student has no course enrolments. #}
+    <p class="mb-0">
+      You are not enrolled in any courses yet.
+      Ask your faculty or the admin to add you.
+    </p>
+
+  {% endif %}
+
+</section>
+
+{# Ends the main content block. #}
+{% endblock %}
