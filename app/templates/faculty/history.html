@@ -1,87 +1,113 @@
 {#
-  This is the faculty dashboard or home page.
+  This page displays the complete correction history of a
+  particular student's attendance record.
 
-  It displays:
-  1. The logged-in faculty member's name.
-  2. All courses assigned to that faculty member.
-  3. The number of students enrolled in each course.
+  It helps faculty track:
+  1. The original attendance status.
+  2. The corrected attendance status.
+  3. Who made the correction.
+  4. When the correction was made.
+  5. Why the correction was made.
 
-  Faculty can select a course to open its attendance management page.
+  Changes are displayed from oldest to newest.
 #}
 
-{# Inherit the common layout from base.html. #}
 {% extends "base.html" %}
 
-{# Set the browser tab title. #}
-{% block title %}Home{% endblock %}
+{% block title %}History{% endblock %}
 
 {% block content %}
 
-{# Display the name of the currently logged-in faculty member.
-   current_user is provided by Flask-Login. #}
+{# Link back to the attendance session and its student roster. #}
+<p class="mb-2">
+
+  <a href="{{ url_for(
+    'faculty.session',
+    session_id=attendance.id
+  ) }}#roster">
+
+    {{ attendance.course.code }},
+    {{ attendance.session_date.strftime("%d %b %Y") }}
+
+  </a>
+
+</p>
+
 <section class="panel">
 
-  <h1 class="h3 mb-0">
-    {{ current_user.full_name }}
+  {# Display the name of the student whose record is being viewed. #}
+  <h1 class="h4 mb-1">
+    {{ record.student.full_name }}
   </h1>
 
-</section>
+  {# Display username and the student's current attendance status. #}
+  <p class="text-muted mb-3">
 
-{# Display all courses assigned to the faculty member. #}
-<section class="panel">
+    {{ record.student.username | upper }}.
 
-  <h2 class="h5 mb-3">
-    Courses you teach
+    Now:
+    <strong>{{ record.status }}</strong>.
+
+  </p>
+
+  <h2 class="h6">
+    Changes, oldest first
   </h2>
 
-  {# Check whether any courses have been assigned. #}
-  {% if courses %}
+  {# Check whether any manual corrections have been made. #}
+  {% if history %}
 
-    <ul class="course-list">
+    <ol class="history-list">
 
-      {# Each course entry contains the course object
-         and its enrolled student count. #}
-      {% for course, student_count in courses %}
+      {# Loop through all recorded attendance corrections. #}
+      {% for h in history %}
 
         <li>
 
-          {# Clicking the course code opens its course management page. #}
-          <a class="course-code"
-             href="{{ url_for(
-               'faculty.course',
-               course_id=course.id
-             ) }}">
+          {# Display the previous status and the new status.
+             If no previous record existed, display "no record". #}
+          <div>
+            <strong>
+              {{ h.old_status or "no record" }}
+              &rarr;
+              {{ h.new_status }}
+            </strong>
+          </div>
 
-            {{ course.code }}
+          {# Display the correction date, time and faculty member
+             who performed the correction. #}
+          <div class="small text-muted">
 
-          </a>
+            {{ h.changed_at | localtime("%d %b %Y, %H:%M") }}
 
-          {# Display the course name. #}
-          <span class="course-name">
-            {{ course.name }}
-          </span>
+            by {{ h.changed_by.full_name }}
 
-          {# Display academic term and enrolled student count. #}
-          <span class="course-term text-muted">
+          </div>
 
-            {{ course.term }},
-            {{ student_count }}
-            student{{ '' if student_count == 1 else 's' }}
-
-          </span>
+          {# Display the reason entered by faculty
+             when changing the attendance. #}
+          <div class="small">
+            Reason: {{ h.reason }}
+          </div>
 
         </li>
 
       {% endfor %}
 
-    </ul>
+    </ol>
 
   {% else %}
 
-    {# Inform the faculty member when no courses are assigned. #}
+    {# When no manual corrections exist, explain how the
+       original attendance record was generated. #}
     <p class="mb-0">
-      No courses are assigned to you yet.
-      Ask the admin to assign your courses.
+
+      No manual changes. This record was made by the
+
+      {{ "face check"
+         if record.method == "qr_face"
+         else "system when attendance closed" }}.
+
     </p>
 
   {% endif %}
