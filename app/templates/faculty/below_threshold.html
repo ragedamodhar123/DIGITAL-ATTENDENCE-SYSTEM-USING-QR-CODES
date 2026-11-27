@@ -1,45 +1,174 @@
+{#
+  This page displays students whose attendance percentage is
+  below a threshold specified by the faculty.
+
+  Faculty can:
+  1. View students with low attendance.
+  2. Change the attendance percentage threshold.
+  3. View the number of classes conducted.
+  4. Filter the report using a date range.
+#}
+
+{# Inherit the common layout, navigation and styling from base.html. #}
 {% extends "base.html" %}
+
+{# Set the browser page title dynamically using the threshold. #}
 {% block title %}Below {{ threshold }}%{% endblock %}
+
 {% block content %}
-<p class="mb-2"><a href="{{ url_for('faculty.course', course_id=course.id) }}#report">{{ course.code }}</a></p>
+
+{# Link back to the course page and its attendance report section. #}
+<p class="mb-2">
+  <a href="{{ url_for('faculty.course', course_id=course.id) }}#report">
+    {{ course.code }}
+  </a>
+</p>
+
 <section class="panel">
-  <h1 class="h4 mb-1">Students below {{ threshold }}%</h1>
+
+  <h1 class="h4 mb-1">
+    Students below {{ threshold }}%
+  </h1>
+
+  {# Display the course name, selected date range and number of
+     finished attendance sessions considered in the report. #}
   <p class="text-muted mb-3">
+
     {{ course.code }} {{ course.name }},
-    {% if report.date_from or report.date_to %}{{ report.date_from or "start" }} to {{ report.date_to or "today" }}{% else %}all finished classes{% endif %}
-    ({{ report.sessions | length }} class{{ "" if report.sessions | length == 1 else "es" }}).
+
+    {% if report.date_from or report.date_to %}
+
+      {# Show the selected date range.
+         If one date is missing, display a suitable default label. #}
+      {{ report.date_from or "start" }}
+      to
+      {{ report.date_to or "today" }}
+
+    {% else %}
+
+      All finished classes
+
+    {% endif %}
+
+    ({{ report.sessions | length }}
+    class{{ "" if report.sessions | length == 1 else "es" }}).
+
   </p>
 
-  <form method="get" class="row g-2 align-items-end mb-3">
-    <input type="hidden" name="from" value="{{ report.date_from or '' }}">
-    <input type="hidden" name="to" value="{{ report.date_to or '' }}">
+  {# GET form allows faculty to change the attendance threshold.
+     The hidden fields preserve the previously selected date range. #}
+  <form method="get" class="row g-2 align-items-end">
+
+    <input type="hidden"
+           name="from"
+           value="{{ report.date_from or '' }}">
+
+    <input type="hidden"
+           name="to"
+           value="{{ report.date_to or '' }}">
+
     <div class="col-6 col-sm-4">
-      <label class="form-label small" for="threshold">Threshold %</label>
-      <input id="threshold" name="threshold" type="number" min="1" max="100" step="1" class="form-control" value="{{ threshold }}">
+
+      <label class="form-label small" for="threshold">
+        Threshold %
+      </label>
+
+      {# Faculty can enter a threshold between 1 and 100. #}
+      <input id="threshold"
+             name="threshold"
+             type="number"
+             min="1"
+             max="100"
+             step="1"
+             class="form-control"
+             value="{{ threshold }}">
+
     </div>
-    <div class="col-6 col-sm-3"><button type="submit" class="btn btn-outline-primary w-100">Update</button></div>
+
+    <div class="col-6 col-sm-3">
+
+      {# Submit the new threshold to the backend. #}
+      <button type="submit"
+              class="btn btn-outline-primary w-100">
+        Update
+      </button>
+
+    </div>
+
   </form>
 
+  {# Display the list of students who fall below the threshold. #}
   {% if rows %}
-    <p class="mb-2"><strong>{{ rows | length }}</strong> of {{ counted }} student{{ "" if counted == 1 else "s" }} below {{ threshold }}%, lowest first.</p>
+
+    {# Show how many students are below the threshold compared
+       with the total number of students considered. #}
+    <p class="mb-2">
+
+      <strong>{{ rows | length }}</strong>
+      of {{ counted }} student{{ "" if counted == 1 else "s" }}
+      below {{ threshold }}%, lowest first.
+
+    </p>
+
     <ul class="attendance-list">
+
+      {# Each row contains one student's attendance statistics. #}
       {% for row in rows %}
+
         <li>
+
           <span>
-            <span class="fw-semibold">{{ row.full_name }}</span>
-            <span class="d-block small text-muted">{{ row.username | upper }}{% if row.section_code %}, {{ row.section_code }}{% endif %}</span>
+
+            {# Display student name, username and section. #}
+            <span class="fw-semibold">
+              {{ row.full_name }}
+            </span>
+
+            <span class="d-block small text-muted">
+              {{ row.username | upper }}
+              {% if row.section_code %}
+                , {{ row.section_code }}
+              {% endif %}
+            </span>
+
           </span>
+
           <span class="attendance-figure below">
+
+            {# Attendance percentage calculated by the backend. #}
             <strong>{{ row.percent }}%</strong>
-            <span class="small text-muted">missed {{ row.absent }} of {{ row.classes }}</span>
+
+            {# Display the number of classes missed and total classes. #}
+            <span class="small text-muted">
+              missed {{ row.absent }} of {{ row.classes }}
+            </span>
+
           </span>
+
         </li>
+
       {% endfor %}
+
     </ul>
+
+  {# If sessions exist but no students are below the threshold,
+     display a suitable message. #}
   {% elif report.sessions %}
-    <p class="mb-0">Nobody is below {{ threshold }}%.</p>
+
+    <p class="mb-0">
+      Nobody is below {{ threshold }}%.
+    </p>
+
+  {# If there are no completed attendance sessions, the report
+     cannot calculate attendance percentages. #}
   {% else %}
-    <p class="mb-0">No finished classes in this period.</p>
+
+    <p class="mb-0">
+      No finished classes in this period.
+    </p>
+
   {% endif %}
+
 </section>
+
 {% endblock %}
